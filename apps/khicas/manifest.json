@@ -1,0 +1,350 @@
+{
+  "schema": 1,
+  "id": "khicas",
+  "name": "KhiCAS",
+  "kind": "system",
+  "category": "tools",
+  "version": "2024.10.23",
+  "summary": "A full computer algebra system, as a flash application.",
+  "description": "KhiCAS is the Giac/Xcas computer algebra system ported to the calculator by its author. It does symbolic algebra — exact arithmetic, factoring, derivatives and integrals, limits, series, equation solving, linear algebra, and 2D and 3D plotting — and it is a second calculator sitting inside your calculator rather than a program you run.\n\nRead this part before installing. KhiCAS is a flash application of nearly 2.7 MB, and the installer takes essentially the whole archive: it ERASES every other flash application and every language pack, and leaves 128 to 256 KB free. It cannot be removed over the cable afterwards, because deleting a flash application needs an undocumented flash write. This is the most destructive thing in the store, and it is worth backing the calculator up with TI Connect CE first.\n\nWhat is installed here is the installer and the 43 pieces it assembles from. Running INST is what writes the application, and the calculator resets when it does. INST checks your OS version and refuses one it does not know, so it fails safely rather than half-writing your flash — but if it refuses, you need the build made for your OS from the author's page.\n\nOn OS 5.5 and later nothing native runs without arTIfiCE, which is in BlueWeb's utils/ folder. Install that first and launch INST from it.",
+  "author": "Bernard Parisse and Renée De Graeve",
+  "homepage": "https://www-fourier.univ-grenoble-alpes.fr/~parisse/ti/khicas84.html",
+  "vendored": {
+    "source": "https://github.com/KhiCAS/ti-ce",
+    "note": "The 84+CE build. Upstream ships nightlies from CI rather than numbered releases, so the version above is the build stamp in INST.8xp's comment field — \"2024-10-23T18:50:35+0200 c522052c\" — rewritten as a date so the Updates panel can order it. Take the date from the new INST.8xp when moving to a newer build. KhiCAS itself is GPL2; INST is closed source and redistributable for non-commercial use.",
+    "dependencies": "None over the link. INST has no libload table at all — it is hand-written assembly, because erasing and writing flash pages is not something the C toolchain exposes — so it does not need clibs. What it does need is arTIfiCE on OS 5.5 or later, and that is not a store package."
+  },
+  "dependencies": [],
+  "actions": {
+    "install": [
+      {
+        "do": "upload",
+        "file": "INST.8xp",
+        "name": "INST",
+        "type": "prot_prgm",
+        "archive": false
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns00.8xv",
+        "name": "AppIns00",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns01.8xv",
+        "name": "AppIns01",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns02.8xv",
+        "name": "AppIns02",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns03.8xv",
+        "name": "AppIns03",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns04.8xv",
+        "name": "AppIns04",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns05.8xv",
+        "name": "AppIns05",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns06.8xv",
+        "name": "AppIns06",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns07.8xv",
+        "name": "AppIns07",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns08.8xv",
+        "name": "AppIns08",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns09.8xv",
+        "name": "AppIns09",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns10.8xv",
+        "name": "AppIns10",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns11.8xv",
+        "name": "AppIns11",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns12.8xv",
+        "name": "AppIns12",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns13.8xv",
+        "name": "AppIns13",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns14.8xv",
+        "name": "AppIns14",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns15.8xv",
+        "name": "AppIns15",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns16.8xv",
+        "name": "AppIns16",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns17.8xv",
+        "name": "AppIns17",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns18.8xv",
+        "name": "AppIns18",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns19.8xv",
+        "name": "AppIns19",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns20.8xv",
+        "name": "AppIns20",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns21.8xv",
+        "name": "AppIns21",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns22.8xv",
+        "name": "AppIns22",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns23.8xv",
+        "name": "AppIns23",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns24.8xv",
+        "name": "AppIns24",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns25.8xv",
+        "name": "AppIns25",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns26.8xv",
+        "name": "AppIns26",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns27.8xv",
+        "name": "AppIns27",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns28.8xv",
+        "name": "AppIns28",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns29.8xv",
+        "name": "AppIns29",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns30.8xv",
+        "name": "AppIns30",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns31.8xv",
+        "name": "AppIns31",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns32.8xv",
+        "name": "AppIns32",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns33.8xv",
+        "name": "AppIns33",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns34.8xv",
+        "name": "AppIns34",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns35.8xv",
+        "name": "AppIns35",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns36.8xv",
+        "name": "AppIns36",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns37.8xv",
+        "name": "AppIns37",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns38.8xv",
+        "name": "AppIns38",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns39.8xv",
+        "name": "AppIns39",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns40.8xv",
+        "name": "AppIns40",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns41.8xv",
+        "name": "AppIns41",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "app/AppIns42.8xv",
+        "name": "AppIns42",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "message",
+        "when": "pre",
+        "level": "action",
+        "text": "Before you run the installer, know what it does: installing KhiCAS ERASES every other flash application and language pack on the calculator, and fills the archive — it needs about 2.9 MB free and leaves 128 to 256 KB. Back up anything you care about with TI Connect CE first. The installer also checks your OS version and refuses an OS it does not recognise, so this build may not suit your calculator."
+      },
+      {
+        "do": "message",
+        "when": "post",
+        "level": "action",
+        "text": "Three steps on the calculator, in this order. 1: run INST — on OS 5.5 or later, start arTIfiCE first ([prgm], choose A, [enter] twice) and launch INST from it; on OS 5.3 or earlier run prgmINST from [prgm]. The calculator resets when it finishes. 2: clear RAM, [2nd] [+], 7:Reset, 1:All RAM — this one matters, KhiCAS misbehaves without it. 3: delete the 43 AppIns appvars, which have done their job: [2nd] [+], 2:Mem Mgmt/Del, B:AppVars. KhiCAS then appears under [apps]."
+      }
+    ],
+    "uninstall": [
+      {
+        "do": "message",
+        "when": "post",
+        "level": "action",
+        "text": "The installer and any AppIns appvars still on the calculator have been removed. KhiCAS itself is a flash application and cannot be deleted over the cable, so remove it by hand: [2nd] [+], 2:Mem Mgmt/Del, A:Apps, put the cursor on KhiCAS and press [del]."
+      }
+    ]
+  }
+}

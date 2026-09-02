@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "revision": "2026-09-02T21:16:55Z",
+  "revision": "2026-09-02T22:00:54Z",
   "categories": [
     {
       "id": "games",
@@ -99,6 +99,18 @@
         "clibs"
       ],
       "summary": "Compiles a TI-BASIC-like language to machine code, on the calculator."
+    },
+    {
+      "id": "khicas",
+      "dir": "khicas",
+      "name": "KhiCAS",
+      "kind": "system",
+      "category": "tools",
+      "version": "2024.10.23",
+      "bytes": 2814827,
+      "maxFile": 65232,
+      "deps": [],
+      "summary": "A full computer algebra system, as a flash application."
     },
     {
       "id": "mario",

@@ -43,10 +43,15 @@ function checkRemove(action, where) {
     throw new ActionError(
       `${where}: "${action.name}" is not a name the calculator will accept`);
   }
-  if (action.type !== undefined && !(action.type in TYPE_BY_NAME)) {
+  /*
+   * Required, not optional. There is no file to read the type out of here, and
+   * defaulting to one would mean looking for an appvar of that name and quietly
+   * finding nothing when the variable is a program.
+   */
+  if (!(action.type in TYPE_BY_NAME)) {
     throw new ActionError(
-      `${where}: "${action.type}" is not a variable type `
-      + `(try ${Object.keys(TYPE_BY_NAME).join(', ')})`);
+      `${where}: a "remove" needs a "type" `
+      + `(one of ${Object.keys(TYPE_BY_NAME).join(', ')})`);
   }
 }
 
@@ -102,26 +107,50 @@ export function updateActions(manifest) {
 }
 
 /**
- * Uninstalling defaults to removing what the index says the package owns.
+ * Uninstalling removes what the index says the package owns -- always.
  *
- * `installedPackage` is the row out of BLUEIDX. Deriving from it rather than
- * from the manifest is what makes an app installed by an older version -- whose
- * file list has since changed -- still uninstall completely.
+ * `installedPackage` is the row out of BLUEIDX, and deriving from it rather
+ * than from the manifest is what makes an app installed by an older version --
+ * whose file list has since changed -- still uninstall completely.
+ *
+ * A manifest's `uninstall` list **adds** to that; it does not replace it. That
+ * distinction is the whole of this function and it was originally the other way
+ * round, which was a bug with no symptom at the time: every real manifest turned
+ * out to want nothing more than a message, so declaring one silently replaced
+ * every removal with nothing. The package vanished from the index and its files
+ * stayed on the calculator, which is worse than either outcome on its own --
+ * they were now files nothing could account for.
+ *
+ * So a manifest can say things and can remove *extra* things, but it cannot
+ * quietly decline to clean up after itself. Anything that should survive an
+ * uninstall -- saved games, settings -- is simply never recorded as owned,
+ * because the package did not install it.
  */
 export function uninstallActions(manifest, installedPackage) {
-  const list = manifest?.actions?.uninstall;
-  if (list) return validateActions(list, `${manifest.id} actions.uninstall`);
+  const declared = manifest?.actions?.uninstall
+    ? validateActions(manifest.actions.uninstall,
+                      `${manifest.id} actions.uninstall`)
+    : [];
 
-  if (!installedPackage) {
-    throw new ActionError(
-      'nothing to uninstall: no manifest list and no record on the calculator');
-  }
-
-  return installedPackage.files.map((file) => ({
+  const owned = (installedPackage?.files ?? []).map((file) => ({
     do: 'remove',
     name: file.name,
     type: TYPE_NAMES[file.type],
   }));
+
+  /* A manifest naming something the index already owns is not an error, just
+   * redundant -- Cesium does it. Deleting twice would only waste a round trip. */
+  const already = new Set(owned.map((action) => action.name));
+  const extra = declared.filter(
+    (action) => action.do === 'remove' && !already.has(action.name));
+  const messages = declared.filter((action) => action.do === 'message');
+
+  if (!owned.length && !extra.length && !installedPackage) {
+    throw new ActionError(
+      'nothing to uninstall: no record of this package on the calculator');
+  }
+
+  return [...messages, ...owned, ...extra];
 }
 
 /** The messages for one phase, in declaration order. */

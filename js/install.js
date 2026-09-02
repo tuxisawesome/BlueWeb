@@ -209,8 +209,7 @@ export class Session {
         }
         done++;
       } else if (action.do === 'remove') {
-        const type = TYPE_BY_NAME[action.type] ?? TYPE_BY_NAME.appvar;
-        await this.calculator.deleteVariable(action.name, type);
+        await this.calculator.deleteVariable(action.name, TYPE_BY_NAME[action.type]);
         row.files = row.files.filter((f) => f.name !== action.name);
       }
     }
@@ -254,8 +253,7 @@ export class Session {
 
     for (const action of effectsOf(actions)) {
       if (action.do === 'remove') {
-        const type = TYPE_BY_NAME[action.type] ?? TYPE_BY_NAME.appvar;
-        await this.calculator.deleteVariable(action.name, type);
+        await this.calculator.deleteVariable(action.name, TYPE_BY_NAME[action.type]);
       } else if (action.do === 'upload') {
         throw new InstallError(
           `${id}: an uninstall cannot upload anything`);

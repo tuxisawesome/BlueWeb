@@ -223,6 +223,33 @@ test('removal deletes what the index records, not what the manifest lists', asyn
   } finally { restore(); }
 });
 
+test('a manifest whose uninstall only speaks still deletes the files', async () => {
+  /*
+   * The whole-flow version of the bug: on a real calculator this removed the
+   * package from the index and left both files behind.
+   */
+  const chatty = {
+    ...snakeManifest,
+    actions: {
+      ...snakeManifest.actions,
+      uninstall: [{ do: 'message', when: 'post', text: 'Your save was kept.' }],
+    },
+  };
+  const restore = stubFetch({ ...files, 'apps/snake/manifest.json': chatty });
+  try {
+    const calc = new FakeCalculator();
+    const session = new Session(calc, catalog);
+    await session.load();
+    await session.apply('snake');
+    equal(calc.variables.size, 2);
+
+    await session.remove('snake');
+    equal(calc.variables.size, 0, 'the files are gone from the calculator');
+    equal(session.packages.length, 0, 'and the row is gone from the index');
+    deepEqual(session.messages, [{ text: 'Your save was kept.', level: 'info' }]);
+  } finally { restore(); }
+});
+
 test('a package the store has dropped can still be removed', async () => {
   /* No manifest is served, which is exactly when somebody wants it gone. */
   const restore = stubFetch({});

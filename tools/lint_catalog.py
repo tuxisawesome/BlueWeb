@@ -142,8 +142,13 @@ def check_actions(manifest, directory, problems, uploads):
                 name = action.get("name")
                 if not isinstance(name, str) or not TI_NAME.match(name or ""):
                     problems.append(f"{at}: \"{name}\" is not a valid TI name")
-                if "type" in action and action["type"] not in TYPE_BY_NAME:
-                    problems.append(f"{at}: \"{action['type']}\" is not a variable type")
+                # Required: there is no file here to read the type out of, and
+                # guessing would mean looking for an appvar and quietly finding
+                # nothing when the variable is a program.
+                if action.get("type") not in TYPE_BY_NAME:
+                    problems.append(
+                        f"{at}: a \"remove\" needs a \"type\" "
+                        f"(one of {', '.join(sorted(TYPE_BY_NAME))})")
 
             elif verb == "message":
                 if not str(action.get("text", "")).strip():

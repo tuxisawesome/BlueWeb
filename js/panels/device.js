@@ -30,7 +30,24 @@ function hardware(hello) {
  * working is named, and keeping the dependency while removing the things that
  * needed it is offered too, because that is very often what was actually meant.
  */
-async function confirmRemoval(target, blockedBy) {
+async function confirmRemoval(target, blockedBy, protectedBy) {
+  if (protectedBy.length) {
+    /*
+     * No option here is safe, so none is offered. Removing the libraries out
+     * from under BlueObject stops BlueObject running, and BlueObject is what
+     * installs things -- the way back is TI Connect and a cable, not this page.
+     */
+    const names = protectedBy.map((p) => p.name).join(' and ');
+    await ask({
+      title: `${target.name} cannot be removed`,
+      body: `${names} needs it to run, and ${names} is what installs and `
+        + `removes everything else. Taking it away would leave this page with `
+        + `no way to put it back — you would need TI Connect and a cable.`,
+      actions: [{ id: null, label: 'Close', kind: 'primary' }],
+    });
+    return null;
+  }
+
   if (!blockedBy.length) {
     return ask({
       title: `Remove ${target.name}?`,
@@ -105,8 +122,8 @@ async function remove(id) {
   const target = session.find(id);
   if (!target) return;
 
-  const { blockedBy } = planRemoval(session.packages, id);
-  const choice = await confirmRemoval(target, blockedBy);
+  const { blockedBy, protectedBy } = planRemoval(session.packages, id);
+  const choice = await confirmRemoval(target, blockedBy, protectedBy);
   if (!choice) return;
 
   /*

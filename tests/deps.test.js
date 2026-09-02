@@ -1,6 +1,7 @@
 import { test, deepEqual, equal, throws, assert } from './harness.js';
 import {
   resolveInstall, dependentsOf, planRemoval, orphansAfter, findUpdates,
+  PROTECTED,
 } from '../js/deps.js';
 
 function catalog(apps) {
@@ -145,4 +146,46 @@ test('updates are found, and downgrades are not offered', () => {
     'clibs is current, and cesium is newer than the store has');
   equal(updates[0].from, '1.1.0');
   equal(updates[0].to, '1.2.0');
+});
+
+
+test('removing the libraries out from under BlueObject is refused outright', () => {
+  /*
+   * BlueObject is a C program and loads five of the shared libraries, so it
+   * depends on clibs like anything else. Cascading would sweep it up -- and
+   * removing it stops the only thing that can install anything, so there is no
+   * route back from the page. Not a warning: no version of this is offered.
+   */
+  const installed = [
+    pkg('clibs', '15.0.0', [], { explicit: false }),
+    pkg('blueobject', '1.0.2', ['clibs'], { kind: 1 }),
+    pkg('2048', '2.2.0', ['clibs']),
+  ];
+
+  const plan = planRemoval(installed, 'clibs');
+  deepEqual(plan.order, [], 'nothing is removed');
+  deepEqual(plan.protectedBy.map((p) => p.id), ['blueobject']);
+
+  /* And cascading does not get round it either. */
+  const forced = planRemoval(installed, 'clibs', { cascade: true });
+  deepEqual(forced.order, [], 'even asked to cascade, it removes nothing');
+  deepEqual(forced.protectedBy.map((p) => p.id), ['blueobject']);
+});
+
+test('an ordinary dependency is still only a warning', () => {
+  /* The protection is specific, not a general refusal to cascade. */
+  const installed = [
+    pkg('clibs', '15.0.0', [], { explicit: false }),
+    pkg('2048', '2.2.0', ['clibs']),
+  ];
+  const plan = planRemoval(installed, 'clibs');
+  deepEqual(plan.protectedBy, []);
+  deepEqual(plan.blockedBy.map((p) => p.id), ['2048']);
+  deepEqual(planRemoval(installed, 'clibs', { cascade: true })
+    .order.map((p) => p.id), ['2048', 'clibs']);
+});
+
+test('BlueObject is the protected one', () => {
+  assert(PROTECTED.has('blueobject'));
+  assert(!PROTECTED.has('cesium'), 'Cesium is a system package but is removable');
 });

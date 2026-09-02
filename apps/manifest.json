@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "revision": "2026-09-02T03:04:16Z",
+  "revision": "2026-09-02T03:12:50Z",
   "categories": [
     {
       "id": "games",
@@ -54,10 +54,12 @@
       "name": "BlueObject",
       "kind": "system",
       "category": "system",
-      "version": "1.0.1",
-      "bytes": 25263,
-      "maxFile": 17850,
-      "deps": [],
+      "version": "1.0.2",
+      "bytes": 25264,
+      "maxFile": 17851,
+      "deps": [
+        "clibs"
+      ],
       "summary": "The calculator companion this store installs through."
     },
     {

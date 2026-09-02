@@ -15,6 +15,22 @@ import { satisfies, compareVersions, isUpgrade } from './version.js';
 
 export class DependencyError extends Error {}
 
+/*
+ * Packages that must never be removed, even as collateral.
+ *
+ * BlueObject is a C program and loads five of the shared libraries, so it
+ * depends on clibs like anything else -- which means a cascading removal of
+ * clibs would sweep it up. The calculator refuses to delete its own program
+ * whatever it is asked, so nothing would actually be lost, but the removal
+ * would fail half-finished and the user would be left with an unusable
+ * calculator and a page reporting an error about a name.
+ *
+ * Better to see it coming. Removing the libraries out from under BlueObject
+ * stops BlueObject running, and BlueObject is what installs things, so there is
+ * no route back from the page -- only TI Connect and a cable.
+ */
+export const PROTECTED = new Set(['blueobject']);
+
 function catalogEntry(catalog, id) {
   const entry = catalog.byId.get(id);
   if (!entry) throw new DependencyError(`"${id}" is not in the catalogue`);
@@ -138,8 +154,20 @@ export function planRemoval(installed, id, { cascade = false } = {}) {
 
   const blockedBy = [...doomed].filter((d) => d !== id).map((d) => byId.get(d));
 
+  /*
+   * Something in the fallout must not be removed at all, so no version of this
+   * is safe -- not even the cascade. The caller has to offer cancelling.
+   */
+  const protectedBy = [...doomed]
+    .filter((d) => PROTECTED.has(d))
+    .map((d) => byId.get(d));
+
+  if (protectedBy.length) {
+    return { order: [], blockedBy, protectedBy };
+  }
+
   if (blockedBy.length && !cascade) {
-    return { order: [], blockedBy };
+    return { order: [], blockedBy, protectedBy: [] };
   }
 
   /*
@@ -164,7 +192,7 @@ export function planRemoval(installed, id, { cascade = false } = {}) {
     .map((d) => byId.get(d))
     .sort((a, b) => measure(b.id) - measure(a.id));
 
-  return { order, blockedBy };
+  return { order, blockedBy, protectedBy: [] };
 }
 
 /**

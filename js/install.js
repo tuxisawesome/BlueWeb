@@ -299,6 +299,36 @@ export class Session {
 }
 
 /**
+ * Delete a list of variables, and keep going when one of them will not go.
+ *
+ * One failure must not abandon the rest. Somebody clearing out a dozen
+ * leftovers has already said what they want done with all twelve, and stopping
+ * at the third would leave them to work out which nine are still there and ask
+ * again. What comes back names both halves, so the panel can say so.
+ *
+ * `deleteVariable` returns false rather than throwing for a variable that was
+ * already gone, which is the outcome that was wanted and not a failure.
+ */
+export async function deleteVariables(calculator, variables, onProgress = null) {
+  const deleted = [];
+  const failed = [];
+
+  for (let at = 0; at < variables.length; at++) {
+    const variable = variables[at];
+    onProgress?.({ variable, done: at, total: variables.length });
+    try {
+      await calculator.deleteVariable(variable.name, variable.type);
+      deleted.push(variable);
+    } catch (error) {
+      failed.push({ variable, error });
+    }
+  }
+
+  onProgress?.({ variable: null, done: variables.length, total: variables.length });
+  return { deleted, failed };
+}
+
+/**
  * Sort what is on the calculator against what the index claims.
  *
  * Three kinds, and only the third is interesting. `owned` is what a package

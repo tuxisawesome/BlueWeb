@@ -11,13 +11,21 @@
  * deterrent, and the panel says so rather than implying more than it delivers.
  */
 
-import { ask, notice, el } from '../ui.js';
+import { ask, notice, progress, el } from '../ui.js';
 import { isAvailable } from '../sha256.js';
+import { encrypt, decrypt } from '../crypt.js';
+import { buildBackup, parseBackup, backupSize } from '../backup.js';
+import { isSystemVariable, deleteVariables } from '../install.js';
+import { parseIndex } from '../blueidx.js';
 
 let getCalculator = null;
+let getSession = null;
 let onChanged = null;
 
-function passwordForm({ title, confirm, needsCurrent }) {
+const KB = 1024;
+const kb = (bytes) => `${(bytes / KB).toFixed(bytes < 10 * KB ? 1 : 0)} KB`;
+
+function passwordForm({ confirm, needsCurrent, labels = {} }) {
   const body = el('div');
   const fields = [];
 
@@ -34,9 +42,11 @@ function passwordForm({ title, confirm, needsCurrent }) {
     return input;
   };
 
-  const current = needsCurrent ? add('Current password', 'current') : null;
-  const next = confirm ? add('New password', 'next') : null;
-  const again = confirm ? add('New password again', 'again') : null;
+  const current = needsCurrent
+    ? add(labels.current || 'Current password', 'current') : null;
+  const next = confirm ? add(labels.next || 'New password', 'next') : null;
+  const again = confirm
+    ? add(labels.again || 'New password again', 'again') : null;
 
   return { body, current, next, again, first: fields[0] };
 }
@@ -109,6 +119,344 @@ async function clearPassword(calculator) {
   }
 }
 
+/* --------------------------------------------------------- backup files */
+
+/*
+ * Hand the finished file to the browser.
+ *
+ * The object URL is revoked on a timer rather than straight after the click:
+ * revoking it synchronously can beat the download to it, and the failure is a
+ * silently empty file rather than an error anybody would see.
+ */
+function save(bytes, filename) {
+  const url = URL.createObjectURL(
+    new Blob([bytes], { type: 'application/octet-stream' }));
+  const link = el('a');
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+/** Ask for a file. Resolves null if the picker was dismissed. */
+function pick() {
+  return new Promise((resolve) => {
+    const input = el('input');
+    input.type = 'file';
+    input.accept = '.bluebak';
+    input.hidden = true;
+    const finish = (file) => { input.remove(); resolve(file); };
+    input.addEventListener('change', () => finish(input.files?.[0] || null));
+    input.addEventListener('cancel', () => finish(null));
+    document.body.append(input);
+    input.click();
+  });
+}
+
+/**
+ * The key for a backup file.
+ *
+ * Where the calculator has a sync password, that is the key, and a backup
+ * verifies it against the calculator before writing anything -- a typo would
+ * otherwise produce a file nobody on earth can open, and it would not be
+ * discovered until the day it was needed.
+ *
+ * A restore does not verify: the file may have been made on another calculator,
+ * or before this one's password was changed, and the file's key is whatever it
+ * was made with. The only thing that can judge it is the decryption.
+ *
+ * Where there is no sync password, the key is a passphrase for the file alone.
+ * It is asked for twice when making one, for the same reason, and labelled so
+ * that nobody believes they have just set something on the calculator.
+ */
+async function askForKey(calculator, { title, intro, making }) {
+  const locked = !!calculator.hello?.password;
+
+  const form = passwordForm({
+    confirm: making && !locked,
+    needsCurrent: !(making && !locked),
+    labels: {
+      current: locked ? 'The calculator’s password' : 'Passphrase for this file',
+      next: 'Passphrase for this file',
+      again: 'The same passphrase again',
+    },
+  });
+  form.body.prepend(el('p', 'dim', intro));
+
+  const answer = await ask({
+    title,
+    body: form.body,
+    actions: [
+      { id: 'go', label: making ? 'Back up' : 'Continue', kind: 'primary' },
+      { id: null, label: 'Cancel' },
+    ],
+  });
+  if (answer !== 'go') return null;
+
+  const value = form.current ? form.current.value : form.next.value;
+  if (!value) {
+    notice('That cannot be empty.', 'bad');
+    return null;
+  }
+  if (form.again && value !== form.again.value) {
+    notice('Those two do not match.', 'bad');
+    return null;
+  }
+
+  if (making && locked) {
+    try {
+      await calculator.authenticate(value);
+    } catch (error) {
+      notice(`Could not check that password: ${error.message}`, 'bad');
+      return null;
+    }
+  }
+
+  return value;
+}
+
+function stamp() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+async function backUp(calculator) {
+  const key = await askForKey(calculator, {
+    title: 'Back up this calculator',
+    making: true,
+    intro: calculator.hello?.password
+      ? 'The backup file is encrypted with this calculator’s password. You '
+        + 'will need it to restore.'
+      : 'This calculator has no sync password, so choose a passphrase for the '
+        + 'file itself. Nothing is stored on the calculator, and there is no '
+        + 'way to recover the file without it.',
+  });
+  if (key === null) return;
+
+  const bar = progress('Backing up');
+  try {
+    bar.say('Looking at what is there');
+    bar.fraction(null);
+
+    /*
+     * BLUE, BLUEUP and BLUETMP are left out. The first two come from the store
+     * and the third is staging litter; the index travels through INDEX_GET
+     * below, with its device block already zeroed by the calculator, so the
+     * password hash is not in a backup and never has been.
+     */
+    const present = (await calculator.listVariables())
+      .filter((variable) => !isSystemVariable(variable.name));
+
+    const index = await calculator.getIndex();
+
+    const variables = [];
+    for (let at = 0; at < present.length; at++) {
+      const variable = present[at];
+      bar.say(`${variable.name} (${at + 1} of ${present.length})`);
+      bar.fraction(at / present.length);
+      variables.push({
+        name: variable.name,
+        type: variable.type,
+        archived: variable.archived,
+        body: await calculator.readVariable(variable.name, variable.type),
+      });
+    }
+
+    bar.say('Encrypting');
+    bar.fraction(null);
+    const file = await encrypt(buildBackup({
+      calcId: calculator.hello?.calcId,
+      blueObject: calculator.hello?.version,
+      index,
+      variables,
+    }), key);
+
+    bar.close();
+    save(file, `blueobject-${calculator.hello?.calcId || 'calculator'}-${stamp()}.bluebak`);
+    notice(`Backed up ${variables.length} file${variables.length === 1 ? '' : 's'}, `
+      + `${kb(backupSize(variables))}.`);
+  } catch (error) {
+    bar.close();
+    notice(`Could not finish the backup: ${error.message}`, 'bad');
+  }
+}
+
+/*
+ * Everything that could stop a restore, checked before a byte is deleted.
+ *
+ * The order matters more here than anywhere else in this page. A restore erases
+ * the calculator first, so a failure discovered half way through costs the user
+ * what they already had as well as what they were restoring. Anything knowable
+ * in advance has to be known in advance.
+ */
+function whyNot(calculator, backup, freed) {
+  const limit = calculator.hello?.maxVarBytes;
+  const tooBig = backup.variables.filter((v) => limit && v.body.length > limit);
+  if (tooBig.length) {
+    return `${tooBig[0].name} holds ${tooBig[0].body.length} bytes and this `
+      + `calculator can only build ${limit} at once. A variable has to fit in `
+      + `RAM before it can be archived, so this backup cannot go on here.`;
+  }
+
+  /*
+   * The archive figure is a floor -- deleted variables do not hand their space
+   * back until the OS collects -- so this only catches what is plainly
+   * impossible, and lets the marginal case try.
+   */
+  const room = (calculator.hello?.freeArchive || 0) + freed;
+  const needed = backupSize(backup.variables);
+  if (needed > room) {
+    return `this backup needs ${kb(needed)} and this calculator will have `
+      + `about ${kb(room)} once it is cleared.`;
+  }
+
+  return null;
+}
+
+async function restore(calculator) {
+  const session = getSession?.();
+  if (!session) {
+    notice('This calculator is not set up, so nothing can be restored to it.', 'bad');
+    return;
+  }
+
+  const file = await pick();
+  if (!file) return;
+
+  const key = await askForKey(calculator, {
+    title: 'Restore from a backup',
+    making: false,
+    intro: 'The password or passphrase this backup was made with — which is '
+      + 'not necessarily this calculator’s.',
+  });
+  if (key === null) return;
+
+  let backup;
+  try {
+    backup = parseBackup(await decrypt(await file.arrayBuffer(), key));
+  } catch (error) {
+    notice(`Could not open that backup: ${error.message}`, 'bad');
+    return;
+  }
+
+  let present;
+  try {
+    present = (await calculator.listVariables())
+      .filter((variable) => !isSystemVariable(variable.name));
+  } catch (error) {
+    notice(`Could not read what is on the calculator: ${error.message}`, 'bad');
+    return;
+  }
+
+  const freed = present.reduce((sum, variable) => sum + variable.bytes, 0);
+  const refusal = whyNot(calculator, backup, freed);
+  if (refusal) {
+    notice(`This backup cannot be restored here: ${refusal}`, 'bad');
+    return;
+  }
+
+  const body = el('div');
+  body.append(el('p', null,
+    `Everything on this calculator will be deleted first — ${present.length} `
+    + `file${present.length === 1 ? '' : 's'}, ${kb(freed)} — and then the `
+    + `${backup.variables.length} in this backup written in their place.`));
+  body.append(el('p', 'dim',
+    `The backup was made on ${(backup.manifest.created || '').slice(0, 10)}`
+    + `${backup.manifest.calcId === calculator.hello?.calcId
+      ? ', on this calculator.' : ', on a different calculator.'}`));
+  body.append(el('p', 'dim',
+    'BlueObject itself, its updater and its index are not touched — they are '
+    + 'what is doing the restoring. This calculator keeps its own sync '
+    + 'password.'));
+
+  const answer = await ask({
+    title: 'Erase this calculator and restore?',
+    body,
+    actions: [
+      { id: null, label: 'Cancel' },
+      { id: 'go', label: 'Erase and restore', kind: 'danger' },
+    ],
+  });
+  if (answer !== 'go') return;
+
+  /*
+   * Which package each file belonged to, so the restored index and the restored
+   * files agree about ownership. A backup whose index will not parse still has
+   * its files, and unowned files are strays -- recoverable, and much better
+   * than refusing to restore anything.
+   */
+  const owners = new Map();
+  try {
+    for (const pkg of parseIndex(backup.index).packages) {
+      for (const item of pkg.files) owners.set(item.name, pkg.id);
+    }
+  } catch { /* the files matter more than the bookkeeping */ }
+
+  const bar = progress('Restoring');
+  try {
+    bar.say('Clearing the calculator');
+    bar.fraction(0);
+    const cleared = await deleteVariables(calculator, present,
+      ({ variable, done, total }) => {
+        if (variable) bar.say(`Clearing ${variable.name}`);
+        bar.fraction((done / total) * 0.2);
+      });
+
+    /*
+     * The index before the files, which is the rule the install path already
+     * follows: the claim is written first, so a restore cut off part way leaves
+     * an index describing where the calculator was heading and the Device
+     * panel's "Recorded but not there" names exactly what is still missing.
+     *
+     * The calculator splices its own live device block over whatever arrives,
+     * so this calculator keeps its password and its failure count. That is what
+     * makes restoring onto a replacement calculator work.
+     */
+    if (backup.index.length) {
+      bar.say('Restoring the record of what is installed');
+      bar.fraction(0.2);
+      await calculator.putIndex(backup.index);
+    }
+
+    for (let at = 0; at < backup.variables.length; at++) {
+      const variable = backup.variables[at];
+      bar.say(`${variable.name} (${at + 1} of ${backup.variables.length})`);
+      bar.fraction(0.25 + (at / backup.variables.length) * 0.75);
+      await calculator.putVariable({
+        name: variable.name,
+        type: variable.type,
+        body: variable.body,
+        archive: variable.archived,
+        owner: owners.get(variable.name) || '',
+      });
+    }
+
+    await session.load();
+    bar.close();
+
+    if (cleared.failed.length) {
+      notice(`Restored ${backup.variables.length} files. `
+        + `${cleared.failed.map((f) => f.variable.name).join(', ')} could not be `
+        + `cleared first and may still be there.`, 'bad');
+    } else {
+      notice(`Restored ${backup.variables.length} `
+        + `file${backup.variables.length === 1 ? '' : 's'}.`);
+    }
+  } catch (error) {
+    bar.close();
+    /*
+     * The calculator is now part way between two states, and saying so is the
+     * useful thing: the index names what should be there, so the Device panel
+     * will list what is missing and running the same restore again finishes it.
+     */
+    notice(`The restore stopped part way: ${error.message}. The calculator is `
+      + `not as it was — run the restore again to finish it.`, 'bad');
+  }
+
+  onChanged?.();
+}
+
 export function render() {
   const panel = document.getElementById('panel-settings');
   const calculator = getCalculator();
@@ -160,6 +508,29 @@ export function render() {
   }
   wrap.append(actions);
 
+  /* -------------------------------------------------------------- backup */
+
+  wrap.append(el('h2', 'category', 'Backup'));
+  wrap.append(el('p', null,
+    'A backup holds every program and appvar on this calculator, and the '
+    + 'record of which app each one belongs to, in one encrypted file.'));
+
+  const backup = el('div', 'app-actions');
+  const make = el('button', 'primary', 'Back up…');
+  make.addEventListener('click', () => backUp(calculator));
+  backup.append(make);
+
+  const put = el('button', 'danger', 'Restore…');
+  put.addEventListener('click', () => restore(calculator));
+  backup.append(put);
+  wrap.append(backup);
+
+  wrap.append(el('p', 'dim',
+    'Restoring erases the calculator first, then writes what the backup holds. '
+    + 'BlueObject, its updater and its index are left alone — they are what '
+    + 'does the restoring — and this calculator keeps its own sync password, '
+    + 'whichever calculator the backup came from.'));
+
   const explain = el('div', 'explain');
   explain.append(el('h2', 'category', 'What this does'));
   explain.append(el('p', 'dim',
@@ -171,6 +542,12 @@ export function render() {
     + 'index on the calculator — and that costs the whole record of what is '
     + 'installed and which files belong to which app, leaving a calculator full '
     + 'of files nothing can account for. That cost is the point.'));
+  explain.append(el('p', 'dim',
+    'A backup file is the other way round: it is the calculator’s contents '
+    + 'sitting on a disk, where nobody is holding it and nothing counts wrong '
+    + 'guesses. So the file is encrypted, and the password is the key rather '
+    + 'than the digest the calculator stores — and if you lose it, the backup '
+    + 'is gone. There is no copy of it anywhere.'));
   wrap.append(explain);
 
   panel.replaceChildren(wrap);
@@ -178,5 +555,6 @@ export function render() {
 
 export function init(hooks) {
   getCalculator = hooks.getCalculator;
+  getSession = hooks.getSession;
   onChanged = hooks.onChanged;
 }

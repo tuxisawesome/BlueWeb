@@ -3,7 +3,7 @@
   "name": "BlueObject",
   "kind": "system",
   "category": "system",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "summary": "The calculator companion this store installs through.",
   "description": "BlueObject runs on the calculator and does the installing. It talks to this page over the USB cable, writes the variables, and keeps the record of what is installed and at what version.\n\nIt is itself a C program and loads five of the shared libraries -- graphics, the keypad, files, serial and USB -- so the C Libraries have to be on the calculator for it to start at all. Removing them stops BlueObject running, and BlueObject is what installs things, so that is not a hole you can climb out of from here.\n\nIt updates itself through BLUEUP, a second program small enough to be rebuilt from nothing. A program on this calculator runs inside its own variable and cannot overwrite itself, so the two install each other.",
   "homepage": "https://github.com/tuxisawesome/BlueObject",

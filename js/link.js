@@ -436,6 +436,61 @@ export class Calculator {
     }
   }
 
+  /**
+   * Read one variable's bytes back off the calculator.
+   *
+   * VAR_STAT first, for the size and the checksum, then one VAR_READ per chunk.
+   * Nothing is remembered between requests on either side -- the chunk index is
+   * the whole of the position -- so a cable pulled part-way through leaves no
+   * transfer to abort and no staging variable behind.
+   *
+   * The CRC is checked here against what VAR_STAT reported, which is the same
+   * guarantee VAR_END gives in the other direction and is retryable the same
+   * way: the calculator still holds the right bytes.
+   */
+  async readVariable(name, type, onProgress = null) {
+    const stat = await this.statVariable(name, type);
+    if (!stat.present) {
+      throw new Error(`${name} is not on the calculator`);
+    }
+
+    const payload = new Uint8Array(8);
+    for (let i = 0; i < name.length && i < 8; i++) payload[i] = name.charCodeAt(i);
+
+    const body = new Uint8Array(stat.bytes);
+    let at = 0;
+
+    /*
+     * An empty variable is still one request. The calculator answers chunk 0 of
+     * a zero-byte variable with zero bytes rather than refusing it, so that a
+     * backup does not have to special-case a file somebody saved empty.
+     */
+    const chunks = Math.max(1, Math.ceil(stat.bytes / CHUNK_SIZE));
+
+    for (let index = 0; index < chunks; index++) {
+      const reply = await this.request(CMD.VAR_READ, payload, type | (index << 8));
+
+      /* More than it promised. Believing it would run off the end of the
+       * buffer, and the size is the thing the CRC below is checked against. */
+      if (at + reply.length > body.length) {
+        throw new Error(`${name} sent more bytes than it said it had`);
+      }
+
+      body.set(reply, at);
+      at += reply.length;
+      onProgress?.(at, stat.bytes);
+    }
+
+    if (at !== stat.bytes) {
+      throw new Error(`${name} ended after ${at} of ${stat.bytes} bytes`);
+    }
+    if (crc32(body) !== stat.crc) {
+      throw new Error(`${name} did not arrive intact -- try again`);
+    }
+
+    return body;
+  }
+
   /* ----------------------------------------------------- system payloads */
 
   /**

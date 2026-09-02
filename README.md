@@ -25,6 +25,8 @@ removing, and the sync password.
 | ✅ | installing and removing, with pre-flight and recoverable interruptions |
 | ✅ | the Store, app pages, search, the Updates panel, removal from Device |
 | ✅ | the sync password |
+| ✅ | clearing several stray files at once from Device |
+| ✅ | encrypted backup of the whole calculator, and restore |
 
 All five panels work against a real calculator.
 
@@ -61,6 +63,33 @@ time, so a recorded exchange cannot be replayed. The calculator counts wrong
 answers and keeps the count across power cycles — it cannot rate-limit anybody,
 since pulling the batteries would defeat that, but it can tell whoever does get
 in how many there have been.
+
+## Backups
+
+Settings can write everything on a calculator — every program and appvar, and the
+record of which app each one belongs to — into a single encrypted file, and put
+it all back later.
+
+Restoring erases first and writes second, in that order and deliberately. A
+restore that merged would leave a calculator holding some of what the backup says
+and some of whatever was there before, and no way to tell which was which.
+BlueObject, its updater and its index are left alone: they are what is doing the
+restoring, and the calculator keeps its own sync password whichever calculator the
+backup came from.
+
+The file is encrypted with the calculator's password, or with a passphrase you
+choose if it has none. That is a different job from the sync password's. The sync
+password protects a *relationship* — nothing can be installed or removed without
+it — and it can afford to be a stored digest, because a guess has to be submitted
+over a cable one at a time into a counter. A backup file is on a disk, where
+whoever has it can guess as fast as their hardware allows, so the passphrase is
+stretched into a key instead. **Lose it and the backup is gone**; there is no copy
+of it anywhere, on the calculator or otherwise.
+
+What is not in a backup: lists, matrices, strings and pictures, whose names are
+tokenised rather than ASCII and do not fit the eight-byte name field the link
+uses — the calculator cannot name them over the wire at all. Nor the password
+hash, which never leaves the device.
 
 ## Requirements
 

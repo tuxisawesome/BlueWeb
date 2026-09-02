@@ -8,5 +8,6 @@ import './blueidx.test.js';
 import './actions.test.js';
 import './deps.test.js';
 import './install.test.js';
+import './backup.test.js';
 
 run();

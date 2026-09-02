@@ -8,7 +8,7 @@
 
 import { planRemoval, orphansAfter, dependentsOf } from '../deps.js';
 import { ask, progress, showMessages, notice, el } from '../ui.js';
-import { describeType, classifyVariables } from '../install.js';
+import { describeType, classifyVariables, deleteVariables } from '../install.js';
 
 let getSession = null;
 let onChanged = null;
@@ -208,23 +208,103 @@ async function removeStray(variable) {
   onChanged?.();
 }
 
+/**
+ * Delete several at once.
+ *
+ * The dialog names every file rather than counting them. Ticking eleven boxes
+ * and reading back "11 files" is not a confirmation of anything -- the whole
+ * risk here is a box ticked by accident, and the only way to catch that is to
+ * show what is actually about to go.
+ */
+async function removeStrays(variables) {
+  if (!variables.length) return;
+  const session = getSession();
+  const total = variables.reduce((sum, variable) => sum + variable.bytes, 0);
+
+  const body = el('div');
+  body.append(el('p', null,
+    `These will be deleted from the calculator, freeing ${kb(total)}. Nothing `
+    + `in the store put them there, so nothing can put them back.`));
+
+  const names = el('ul', 'plain');
+  for (const variable of variables) {
+    names.append(el('li', 'dim small',
+      `${variable.name} — ${describeType(variable.type)}, ${kb(variable.bytes)}`));
+  }
+  body.append(names);
+
+  const answer = await ask({
+    title: `Delete ${variables.length} files?`,
+    body,
+    actions: [
+      { id: null, label: 'Keep them' },
+      { id: 'go', label: `Delete ${variables.length}`, kind: 'danger' },
+    ],
+  });
+  if (answer !== 'go') return;
+
+  const bar = progress('Deleting');
+  const { deleted, failed } = await deleteVariables(
+    session.calculator, variables,
+    ({ variable, done, total: count }) => {
+      if (variable) bar.say(variable.name);
+      bar.fraction(done / count);
+    });
+  bar.close();
+
+  /*
+   * One that would not go does not hide the ten that did. Naming the survivors
+   * is the difference between trying again and trying again on everything.
+   */
+  if (failed.length) {
+    notice(`Deleted ${deleted.length}. ${failed.map((f) => f.variable.name).join(', ')} `
+      + `would not go: ${failed[0].error.message}`, 'bad');
+  } else {
+    notice(`Deleted ${deleted.length} file${deleted.length === 1 ? '' : 's'}.`);
+  }
+  onChanged?.();
+}
+
 function strayList(sorted) {
   const wrap = el('div');
   wrap.append(el('h2', 'category', 'Not from the store'));
   wrap.append(el('p', 'dim',
     'Files on the calculator that no installed package accounts for. Saved '
-    + 'games live here, and so does anything sent across by hand — so this is '
-    + 'a list to read, not a list to empty.'));
+    + 'games live here, and so does anything sent across by hand — so read it '
+    + 'before you empty it. Tick what you are sure of.'));
 
+  const boxes = new Map();
   const rows = el('ul', 'plain installed');
+
+  const actions = el('div', 'app-actions');
+  const bulk = el('button', 'danger', 'Delete selected');
+
+  const chosen = () => sorted.filter((variable) => boxes.get(variable).checked);
+  const update = () => {
+    const picked = chosen();
+    const freed = picked.reduce((sum, variable) => sum + variable.bytes, 0);
+    bulk.disabled = picked.length === 0;
+    bulk.textContent = picked.length
+      ? `Delete ${picked.length} selected — frees ${kb(freed)}`
+      : 'Delete selected';
+  };
+
   for (const variable of sorted) {
     const row = el('li');
+
+    const label = el('label');
+    const box = el('input');
+    box.type = 'checkbox';
+    box.addEventListener('change', update);
+    boxes.set(variable, box);
+
     const main = el('div');
     main.append(el('strong', null, variable.name));
     main.append(el('span', 'dim',
       `  ${describeType(variable.type)}, ${kb(variable.bytes)}`
       + `${variable.archived ? '' : ', in RAM'}`));
-    row.append(main);
+    label.append(box, main);
+    row.append(label);
 
     const button = el('button', 'danger small-button', 'Delete');
     button.addEventListener('click', () => removeStray(variable));
@@ -232,6 +312,12 @@ function strayList(sorted) {
     rows.append(row);
   }
   wrap.append(rows);
+
+  bulk.addEventListener('click', () => removeStrays(chosen()));
+  actions.append(bulk);
+  update();
+  wrap.append(actions);
+
   return wrap;
 }
 

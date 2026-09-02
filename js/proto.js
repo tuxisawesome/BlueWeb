@@ -45,6 +45,7 @@ export const CMD = {
   SYS_CHUNK: 0x11,
   SYS_END: 0x12,
   PW_SET: 0x13,
+  VAR_READ: 0x14,
   BYE: 0x1f,
   BUSY: 0xfe,
 };

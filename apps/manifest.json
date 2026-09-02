@@ -1,10 +1,14 @@
 {
   "schema": 1,
-  "revision": "2026-09-02T02:26:26Z",
+  "revision": "2026-09-02T02:41:13Z",
   "categories": [
     {
       "id": "games",
       "name": "Games"
+    },
+    {
+      "id": "tools",
+      "name": "Tools"
     },
     {
       "id": "libs",
@@ -65,6 +69,34 @@
       "maxFile": 11354,
       "deps": [],
       "summary": "Shared libraries that most C and ICE programs need to run."
+    },
+    {
+      "id": "icecompiler",
+      "dir": "icecompiler",
+      "name": "ICE Compiler",
+      "kind": "app",
+      "category": "tools",
+      "version": "2.2.1",
+      "bytes": 27480,
+      "maxFile": 22805,
+      "deps": [
+        "clibs"
+      ],
+      "summary": "Compiles a TI-BASIC-like language to machine code, on the calculator."
+    },
+    {
+      "id": "solitare",
+      "dir": "solitare",
+      "name": "SolitiCE",
+      "kind": "app",
+      "category": "games",
+      "version": "2.0.0",
+      "bytes": 10358,
+      "maxFile": 10358,
+      "deps": [
+        "clibs"
+      ],
+      "summary": "Klondike solitaire, with scoring and a clock."
     }
   ]
 }

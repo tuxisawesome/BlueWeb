@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "id": "solitare",
+  "name": "SolitiCE",
+  "kind": "app",
+  "category": "games",
+  "version": "2.0.0",
+  "summary": "Klondike solitaire, with scoring and a clock.",
+  "description": "Klondike solitaire for the TI-84 Plus CE. Version 2 was rewritten in C and added scoring, pictograms, custom card backs and a clock.\n\nArrows move the cursor, [2nd] picks a card up and puts it down, [alpha] moves a card wherever it will go, and [clear] quits.\n\nThe game saves itself when you close it, so quitting mid-hand loses nothing.",
+  "author": "BasicTH",
+  "homepage": "https://www.cemetech.net/forum/viewtopic.php?t=15513",
+  "dependencies": [
+    { "id": "clibs", "version": ">=15.0.0" }
+  ],
+  "actions": {
+    "install": [
+      { "do": "upload", "file": "SOLITICE.8xp", "name": "SOLITICE", "type": "prot_prgm", "archive": true }
+    ],
+    "uninstall": [
+      {
+        "do": "message",
+        "when": "post",
+        "level": "info",
+        "text": "SolitiCE saves your hand to an appvar it creates itself, which has been left alone — reinstalling picks the game back up. If you would rather clear it, look for a SolitiCE appvar under [2nd] [+], 2:Mem Mgmt/Del, AppVars."
+      }
+    ]
+  }
+}

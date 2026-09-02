@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "id": "icecompiler",
+  "name": "ICE Compiler",
+  "kind": "app",
+  "category": "tools",
+  "version": "2.2.1",
+  "summary": "Compiles a TI-BASIC-like language to machine code, on the calculator.",
+  "description": "ICE compiles a language much like TI-BASIC straight to ez80 machine code, so the result runs at assembly speed instead of being interpreted a token at a time. Programs written this way are dramatically faster than the same thing in TI-BASIC, and can use the colour screen properly.\n\nIt runs on the calculator itself: start it, pick one of your source programs from the list, and it writes out a compiled program next to it. There is a commands list in the documentation — the language is close to TI-BASIC but not all of it is there.\n\n2048, elsewhere in this store, was written with it.",
+  "author": "Peter \"PT_\" Tillema",
+  "homepage": "https://github.com/PeterTillema/ICE",
+  "dependencies": [
+    { "id": "clibs", "version": ">=15.0.0" }
+  ],
+  "actions": {
+    "install": [
+      { "do": "upload", "file": "ICEHOOKS.8xv", "name": "ICEHOOKS", "type": "appvar", "archive": true },
+      { "do": "upload", "file": "ICE.8xp", "name": "ICE", "type": "prot_prgm", "archive": true },
+      {
+        "do": "message",
+        "when": "post",
+        "level": "info",
+        "text": "Run prgmICE to compile. It lists the ICE source programs on your calculator; pick one with the arrows and press [enter]. On OS 5.2 or earlier you need the Asm( token in front."
+      }
+    ]
+  }
+}

@@ -53,15 +53,25 @@ class Reader {
   constructor(bytes) {
     this.bytes = bytes;
     this.view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    /* Set once the tables have been measured; until then no string is readable. */
+    this.poolAt = Infinity;
   }
 
   u8(at) { return this.bytes[at]; }
   u16(at) { return this.view.getUint16(at, true); }
 
-  /* A NUL-terminated string that must end before the buffer does. */
+  /*
+   * A NUL-terminated string, which must start inside the pool and end before
+   * the buffer does.
+   *
+   * Checked against the pool rather than the header, so that an offset pointing
+   * into the package or file table is refused. The calculator's index.c checks
+   * it that way, and a parser here that accepted what the calculator rejects
+   * would let a bad index through to be discovered on hardware.
+   */
   string(at, what) {
-    if (at < HEADER_SIZE || at >= this.bytes.length) {
-      throw new Error(`${what}: string offset ${at} is outside the index`);
+    if (at < this.poolAt || at >= this.bytes.length) {
+      throw new Error(`${what}: string offset ${at} is outside the string pool`);
     }
     let end = at;
     while (end < this.bytes.length && this.bytes[end] !== 0) end++;
@@ -115,6 +125,7 @@ export function parseIndex(bytes) {
   const filesAt = packagesAt + packageCount * PACKAGE_RECORD;
   const poolAt = filesAt + fileCount * FILE_RECORD;
   const expected = poolAt + poolSize;
+  r.poolAt = poolAt;
 
   /*
    * totalSize is redundant with the counts on purpose. It is the one field that

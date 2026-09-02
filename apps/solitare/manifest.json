@@ -10,18 +10,24 @@
   "author": "BasicTH",
   "homepage": "https://www.cemetech.net/forum/viewtopic.php?t=15513",
   "dependencies": [
-    { "id": "clibs", "version": ">=15.0.0" }
+    "clibs"
   ],
   "actions": {
     "install": [
-      { "do": "upload", "file": "SOLITICE.8xp", "name": "SOLITICE", "type": "prot_prgm", "archive": true }
+      {
+        "do": "upload",
+        "file": "SOLITICE.8xp",
+        "name": "SOLITICE",
+        "type": "prot_prgm",
+        "archive": true
+      }
     ],
     "uninstall": [
       {
         "do": "message",
         "when": "post",
         "level": "info",
-        "text": "SolitiCE saves your hand to an appvar it creates itself, which has been left alone — reinstalling picks the game back up. If you would rather clear it, look for a SolitiCE appvar under [2nd] [+], 2:Mem Mgmt/Del, AppVars."
+        "text": "SolitiCE saves your hand to an appvar it creates itself, which has been left alone \u2014 reinstalling picks the game back up. If you would rather clear it, look for a SolitiCE appvar under [2nd] [+], 2:Mem Mgmt/Del, AppVars."
       }
     ]
   }

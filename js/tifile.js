@@ -15,7 +15,13 @@
  * section itself, and a 16-bit sum of the section.
  */
 
-const SIGNATURE = [0x2a, 0x2a, 0x54, 0x49, 0x38, 0x33, 0x46, 0x2a, 0x1a, 0x0a, 0x00];
+/*
+ * "**TI83F*" and 0x1A 0x0A. The byte after those is usually 0x00 and is widely
+ * quoted as part of the signature, but it is not: Oiram's OiramPK.8xv ships
+ * with an 'O' there and is otherwise a perfectly ordinary variable file whose
+ * checksum validates. Insisting on the eleventh byte rejected a real release.
+ */
+const SIGNATURE = [0x2a, 0x2a, 0x54, 0x49, 0x38, 0x33, 0x46, 0x2a, 0x1a, 0x0a];
 
 export const TYPE_PROGRAM = 0x05;
 export const TYPE_PROTECTED_PROGRAM = 0x06;

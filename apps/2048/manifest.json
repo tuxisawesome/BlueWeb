@@ -10,11 +10,17 @@
   "author": "Pi_Runner",
   "homepage": "https://www.cemetech.net/downloads/files/1719",
   "dependencies": [
-    { "id": "clibs", "version": ">=15.0.0" }
+    "clibs"
   ],
   "actions": {
     "install": [
-      { "do": "upload", "file": "CE2048.8xp", "name": "CE2048", "type": "prot_prgm", "archive": true }
+      {
+        "do": "upload",
+        "file": "CE2048.8xp",
+        "name": "CE2048",
+        "type": "prot_prgm",
+        "archive": true
+      }
     ],
     "uninstall": [
       {

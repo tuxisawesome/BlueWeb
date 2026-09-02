@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "revision": "2026-09-02T02:41:13Z",
+  "revision": "2026-09-02T03:04:16Z",
   "categories": [
     {
       "id": "games",
@@ -33,6 +33,20 @@
         "clibs"
       ],
       "summary": "Slide numbered tiles together until one of them reads 2048."
+    },
+    {
+      "id": "blockblast",
+      "dir": "blockblast",
+      "name": "Block Blast",
+      "kind": "app",
+      "category": "games",
+      "version": "1.0.0",
+      "bytes": 6676,
+      "maxFile": 6676,
+      "deps": [
+        "clibs"
+      ],
+      "summary": "Fit pieces into an 8x8 grid for as long as you can."
     },
     {
       "id": "blueobject",
@@ -83,6 +97,20 @@
         "clibs"
       ],
       "summary": "Compiles a TI-BASIC-like language to machine code, on the calculator."
+    },
+    {
+      "id": "mario",
+      "dir": "mario",
+      "name": "Oiram",
+      "kind": "app",
+      "category": "games",
+      "version": "1.0.0",
+      "bytes": 126310,
+      "maxFile": 65484,
+      "deps": [
+        "clibs"
+      ],
+      "summary": "A platformer, with a large set of levels and an editor."
     },
     {
       "id": "solitare",

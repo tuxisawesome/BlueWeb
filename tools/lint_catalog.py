@@ -31,17 +31,31 @@ TYPE_BY_NAME = {
     "appvar": 0x15,
 }
 
-SIGNATURE = b"**TI83F*\x1a\x0a\x00"
+# "**TI83F*" and 0x1A 0x0A. The byte after those is usually 0x00 and is widely
+# quoted as part of the signature, but it is not: Oiram's OiramPK.8xv ships with
+# an 'O' there and is otherwise an ordinary variable file whose checksum
+# validates. Insisting on the eleventh byte rejected a real release.
+SIGNATURE = b"**TI83F*\x1a\x0a"
 
-# A TI variable must exist whole in RAM before it can be archived, and there is
-# nowhere near 64 KB of that free. Anything above this will not install on a
-# typical calculator, so it must not reach the store.
-SIZE_FLOOR = 32 * 1024
+# A variable's length field is 16 bit, so nothing above this can exist on any
+# calculator at all. This is the only size that is worth refusing outright.
+SIZE_LIMIT = 65512
+
+# Above this, a package may not install on a calculator that has much in RAM --
+# a variable has to exist whole there before it can be archived. It is a warning
+# and not a refusal, because how much RAM is free is a property of the
+# calculator and not of the package: BlueWeb pre-flights every file against the
+# figure the calculator actually reports, and says which one will not fit.
+#
+# This started life as a hard floor, which was a guess, and the guess was wrong
+# the first time a real game hit it -- Oiram ships a 65 KB level pack that is
+# perfectly installable on a calculator with room.
+SIZE_WARN = 32 * 1024
 
 
 def read_variable(data, where, problems):
     """The name, type and size inside a .8xp/.8xv, or None if it is not one."""
-    if len(data) < 57 or data[:11] != SIGNATURE:
+    if len(data) < 57 or data[:len(SIGNATURE)] != SIGNATURE:
         problems.append(f"{where}: not a TI variable file")
         return None
 
@@ -66,7 +80,7 @@ def read_variable(data, where, problems):
             "archived": bool(entry[14] & 0x80), "bytes": body_length}
 
 
-def check_actions(manifest, directory, problems, uploads):
+def check_actions(manifest, directory, problems, uploads, warnings):
     actions = manifest.get("actions")
     if not isinstance(actions, dict):
         problems.append(f"{manifest['id']}: no \"actions\" object")
@@ -132,11 +146,15 @@ def check_actions(manifest, directory, problems, uploads):
                             f"{at}: declares type \"{action['type']}\" but {name} "
                             f"is {TYPE_NAMES.get(info['type'], 'unknown')}")
 
-                if info["bytes"] > SIZE_FLOOR:
+                if info["bytes"] > SIZE_LIMIT:
                     problems.append(
                         f"{at}: {name} is {info['bytes']} bytes, over the "
-                        f"{SIZE_FLOOR}-byte floor -- a variable must fit in RAM "
-                        f"before it can be archived, so this will not install")
+                        f"{SIZE_LIMIT}-byte limit a TI variable can ever be")
+                elif info["bytes"] > SIZE_WARN:
+                    warnings.append(
+                        f"{at}: {name} is {info['bytes']} bytes. A variable has "
+                        f"to fit in RAM before it can be archived, so this needs "
+                        f"a calculator with little else in memory")
 
             elif verb == "remove":
                 name = action.get("name")
@@ -165,6 +183,7 @@ def main():
     apps = root / "apps"
 
     problems = []
+    warnings = []
     manifests = {}
 
     for directory in sorted(p for p in apps.iterdir() if p.is_dir()):
@@ -199,7 +218,7 @@ def main():
             problems.append(f"{package_id}: no display name")
 
         uploads = []
-        check_actions(manifest, directory, problems, uploads)
+        check_actions(manifest, directory, problems, uploads, warnings)
         manifests[package_id] = (manifest, directory, uploads)
 
     # Dependencies, once every package is known.
@@ -240,6 +259,8 @@ def main():
         return 1
 
     print(f"ok: {len(manifests)} packages in apps/ are well formed")
+    for warning in sorted(set(warnings)):
+        print(f"  note: {warning}")
     return 0
 
 

@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "id": "blockblast",
+  "name": "Block Blast",
+  "kind": "app",
+  "category": "games",
+  "version": "1.0.0",
+  "summary": "Fit pieces into an 8x8 grid for as long as you can.",
+  "description": "Like Tetris, except the pieces do not fall and lines clear in both directions. You are handed random pieces and have to fit them into an 8x8 grid until nothing fits any more.\n\nArrows move the piece, [2nd] places it, and [alpha] swaps the current piece for the next one.",
+  "author": "ashy",
+  "homepage": "https://codeberg.org/ashy/block-blast",
+  "dependencies": ["clibs"],
+  "actions": {
+    "install": [
+      { "do": "upload", "file": "BLKBLAST.8xp", "name": "BLKBLAST", "type": "prot_prgm", "archive": true }
+    ]
+  }
+}

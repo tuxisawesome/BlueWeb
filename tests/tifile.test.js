@@ -21,6 +21,18 @@ test('reads an appvar, and keeps its archive flag', () => {
   bytesEqual(got.body, fromHex(want.body), 'appvar body');
 });
 
+test('the eleventh byte is not part of the signature', () => {
+  /*
+   * It is quoted as part of it almost everywhere, and it is not. Oiram's
+   * OiramPK.8xv has an 'O' there and is otherwise an ordinary variable file
+   * whose checksum validates -- requiring 0x00 rejected a real release.
+   */
+  const got = readVariable(fromHex(fixtures.variables.oddSignatureByte));
+  equal(got.name, 'SNAKE');
+  bytesEqual(got.body, fromHex(fixtures.variables.program.body),
+    'the body reads back the same either way');
+});
+
 test('a damaged file is refused rather than pushed', () => {
   /*
    * This is the one path where a malformed file becomes a program the

@@ -25,6 +25,26 @@ import {
 
 export class InstallError extends Error {}
 
+/*
+ * Variables that cannot be written the ordinary way.
+ *
+ * BlueObject refuses any name beginning with BLUE through VAR_*, so that a
+ * catalogue entry cannot name the index and have it deleted or name the running
+ * program and have it overwritten. These are the ones that are supposed to be
+ * written, and the staged path is how: each gets a slot in the archive.
+ *
+ * The order is the order they are sent in, and it matters. If a session dies
+ * between the two, what is left is a calculator with a current updater and its
+ * old BlueObject -- which still works, and can still be updated next time. The
+ * other way round leaves an armed update and an updater too old to be trusted
+ * with it.
+ */
+const SYSTEM_SLOTS = { BLUEUP: 1, BLUE: 0 };
+
+export function isSystemVariable(name) {
+  return name.startsWith('BLUE');
+}
+
 /**
  * One connected calculator, and what is on it.
  *
@@ -149,21 +169,44 @@ export class Session {
     if (at >= 0) this.packages[at] = row; else this.packages.push(row);
     await this.save();
 
-    /* Now the work, in declaration order. */
+    /*
+     * Uploads for a system package go in the order the manifest lists them,
+     * which for BlueObject means the updater before the program it installs.
+     * See SYSTEM_SLOTS.
+     */
     let done = 0;
     for (const action of effectsOf(actions)) {
       if (action.do === 'upload') {
         const { variable } = uploads.find((u) => u.action === action);
-        await this.calculator.putVariable({
-          name: variable.name,
-          type: variable.type,
-          body: variable.body,
-          archive: action.archive !== false,
-          owner: id,
-        }, (sent, size) => onProgress?.({
+        const report = (sent, size) => onProgress?.({
           package: entry.name, file: variable.name, sent, size,
           step: done, steps: uploads.length,
-        }));
+        });
+
+        if (isSystemVariable(variable.name)) {
+          const slot = SYSTEM_SLOTS[variable.name];
+          if (slot === undefined) {
+            throw new InstallError(
+              `${variable.name} is a name BlueObject reserves, and this page `
+              + `does not know how to install it`);
+          }
+          await this.calculator.putSystemPayload({
+            name: variable.name,
+            type: variable.type,
+            body: variable.body,
+            archive: action.archive !== false,
+            slot,
+            version: entry.version,
+          }, report);
+        } else {
+          await this.calculator.putVariable({
+            name: variable.name,
+            type: variable.type,
+            body: variable.body,
+            archive: action.archive !== false,
+            owner: id,
+          }, report);
+        }
         done++;
       } else if (action.do === 'remove') {
         const type = TYPE_BY_NAME[action.type] ?? TYPE_BY_NAME.appvar;

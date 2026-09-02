@@ -371,6 +371,50 @@ export class Calculator {
     }
   }
 
+  /* ----------------------------------------------------- system payloads */
+
+  /**
+   * Send a payload that replaces a variable the calculator may be running.
+   *
+   * A CE program lives inside its own variable and cannot overwrite itself, so
+   * BlueObject refuses any name beginning with BLUE through the ordinary
+   * variable path. This is the only way one gets written: the image is staged
+   * in the archive a chunk at a time, checked where it lies, and then either
+   * installed straight away -- if it is not the program currently running -- or
+   * armed for prgmBLUEUP to finish.
+   *
+   * So the two rules are the same rule. A reserved name is exactly a name that
+   * has to come this way.
+   */
+  async putSystemPayload({ name, type, body, archive = true, slot, version },
+                         onProgress = null) {
+    const chunkSize = this.hello?.chunkSize || CHUNK_SIZE;
+    const chunks = Math.ceil(body.length / chunkSize);
+
+    const begin = new Uint8Array(28);
+    const view = new DataView(begin.buffer);
+    for (let i = 0; i < name.length && i < 8; i++) begin[i] = name.charCodeAt(i);
+    begin[8] = type;
+    begin[9] = archive ? 1 : 0;
+    view.setUint32(10, body.length, true);
+    view.setUint16(14, chunks, true);
+    view.setUint32(16, crc32(body), true);
+    for (let i = 0; i < version.length && i < 8; i++) {
+      begin[20 + i] = version.charCodeAt(i);
+    }
+
+    await this.request(CMD.SYS_BEGIN, begin, slot);
+
+    let index = 0;
+    for (let at = 0; at < body.length; at += chunkSize) {
+      await this.request(CMD.SYS_CHUNK, body.subarray(at, at + chunkSize),
+                         slot | (index++ << 8));
+      if (onProgress) onProgress(Math.min(at + chunkSize, body.length), body.length);
+    }
+
+    await this.request(CMD.SYS_END, new Uint8Array(0), slot);
+  }
+
   async sweep() {
     const reply = await this.request(CMD.SWEEP);
     return new DataView(reply.buffer, reply.byteOffset, reply.byteLength)

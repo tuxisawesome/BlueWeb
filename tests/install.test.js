@@ -38,6 +38,11 @@ class FakeCalculator {
       (p) => `${p.id}${p.installing ? '*' : ''}`).join(',')})`);
   }
 
+  async putSystemPayload({ name, body, slot }) {
+    this.variables.set(name, body);
+    this.log.push(`sys(${name}@${slot})`);
+  }
+
   async putVariable({ name, body }) {
     if (this.failOn === name) throw new Error(`pretend failure writing ${name}`);
     this.variables.set(name, body);
@@ -275,4 +280,126 @@ test('removing something that is not installed says so', async () => {
   let threw = null;
   try { await session.remove('nothing'); } catch (error) { threw = error; }
   assert(threw instanceof InstallError, 'an InstallError names the problem');
+});
+
+
+/* --------------------------------------------------------- system payloads */
+
+const systemCatalog = {
+  byId: new Map([
+    ['blueobject', { id: 'blueobject', dir: 'blueobject', name: 'BlueObject',
+                     kind: 'system', version: '1.1.0', deps: [] }],
+  ]),
+};
+
+const systemManifest = {
+  id: 'blueobject', name: 'BlueObject', kind: 'system', version: '1.1.0',
+  actions: {
+    install: [
+      { do: 'upload', file: 'BLUEUP.8xp', archive: true },
+      { do: 'upload', file: 'BLUE.8xp', archive: true },
+      { do: 'message', when: 'post', level: 'action', text: 'Run prgmBLUEUP.' },
+    ],
+  },
+};
+
+function tiFile(name, type, body) {
+  /* Assembled here rather than fetched, so the test does not depend on a real
+   * build being present in apps/. */
+  const varData = new Uint8Array(2 + body.length);
+  varData[0] = body.length & 0xff;
+  varData[1] = body.length >> 8;
+  varData.set(body, 2);
+
+  const entry = new Uint8Array(17 + varData.length);
+  let at = 0;
+  entry[at++] = 13; entry[at++] = 0;
+  entry[at++] = varData.length & 0xff; entry[at++] = varData.length >> 8;
+  entry[at++] = type;
+  for (let i = 0; i < name.length; i++) entry[at + i] = name.charCodeAt(i);
+  at += 8;
+  entry[at++] = 0;
+  entry[at++] = 0x80;
+  entry[at++] = varData.length & 0xff; entry[at++] = varData.length >> 8;
+  entry.set(varData, at);
+
+  let sum = 0;
+  for (const byte of entry) sum = (sum + byte) & 0xffff;
+
+  const file = new Uint8Array(55 + entry.length + 2);
+  file.set([0x2a, 0x2a, 0x54, 0x49, 0x38, 0x33, 0x46, 0x2a, 0x1a, 0x0a, 0x00], 0);
+  file[53] = entry.length & 0xff;
+  file[54] = entry.length >> 8;
+  file.set(entry, 55);
+  file[55 + entry.length] = sum & 0xff;
+  file[56 + entry.length] = sum >> 8;
+  return file;
+}
+
+const systemFiles = {
+  'apps/blueobject/manifest.json': systemManifest,
+  'apps/blueobject/BLUE.8xp': tiFile('BLUE', 0x06, new Uint8Array(2000)),
+  'apps/blueobject/BLUEUP.8xp': tiFile('BLUEUP', 0x06, new Uint8Array(500)),
+};
+
+test('reserved names go down the staged path, not the ordinary one', async () => {
+  const restore = stubFetch(systemFiles);
+  try {
+    const calc = new FakeCalculator();
+    const session = new Session(calc, systemCatalog);
+    await session.load();
+    await session.apply('blueobject');
+
+    /*
+     * BlueObject refuses any BLUE* name through VAR_*, so a put() here would
+     * mean the page was about to be told "bad name" by the calculator.
+     */
+    assert(!calc.log.some((entry) => entry.startsWith('put(')),
+      `nothing should use the ordinary path: ${calc.log.join(' ')}`);
+
+    /*
+     * The updater before the program it installs. If a session dies between
+     * the two, this order leaves a current updater and the old BlueObject --
+     * which still works and can still be updated. The other order leaves an
+     * armed update and an updater too old to be trusted with it.
+     */
+    const staged = calc.log.filter((entry) => entry.startsWith('sys('));
+    deepEqual(staged, ['sys(BLUEUP@1)', 'sys(BLUE@0)']);
+  } finally { restore(); }
+});
+
+test('the "run prgmBLUEUP" message is carried back to the user', async () => {
+  const restore = stubFetch(systemFiles);
+  try {
+    const calc = new FakeCalculator();
+    const session = new Session(calc, systemCatalog);
+    await session.load();
+    await session.apply('blueobject');
+
+    deepEqual(session.messages, [{ text: 'Run prgmBLUEUP.', level: 'action' }]);
+  } finally { restore(); }
+});
+
+test('a reserved name the page does not know about is refused', async () => {
+  const restore = stubFetch({
+    'apps/rogue/manifest.json': {
+      id: 'rogue', name: 'Rogue', kind: 'app', version: '1.0.0',
+      actions: { install: [{ do: 'upload', file: 'BLUEIDX.8xv' }] },
+    },
+    'apps/rogue/BLUEIDX.8xv': tiFile('BLUEIDX', 0x15, new Uint8Array(10)),
+  });
+  try {
+    const calc = new FakeCalculator();
+    const session = new Session(calc, {
+      byId: new Map([['rogue', { id: 'rogue', dir: 'rogue', name: 'Rogue',
+                                 kind: 'app', version: '1.0.0', deps: [] }]]),
+    });
+    await session.load();
+
+    let message = '';
+    try { await session.apply('rogue'); } catch (error) { message = error.message; }
+    /* The index is not something a catalogue entry gets to overwrite. */
+    assert(message.includes('reserves'), `expected a refusal, got "${message}"`);
+    assert(!calc.variables.has('BLUEIDX'), 'nothing was written');
+  } finally { restore(); }
 });

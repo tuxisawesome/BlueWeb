@@ -102,6 +102,7 @@ to remove the app by hand.
 
 ```json
 {
+  "schema": 1,
   "id": "cesium",
   "name": "Cesium",
   "kind": "system",
@@ -110,25 +111,39 @@ to remove the app by hand.
   "dependencies": [],
   "actions": {
     "install": [
-      { "do": "upload", "file": "CESIUM.8xp", "archive": true },
+      { "do": "upload", "file": "cesium_english.zx0.8xp",
+        "name": "CESIUM", "type": "prot_prgm", "archive": true },
       { "do": "message", "when": "post", "level": "action",
         "text": "Run prgmCESIUM once to finish installing Cesium. Quit BlueObject, press [prgm], choose CESIUM and press [enter]." }
     ],
     "uninstall": [
-      { "do": "remove", "name": "CESIUM", "type": "program" },
+      { "do": "remove", "name": "CESIUM", "type": "prot_prgm" },
       { "do": "message", "when": "post", "level": "action",
-        "text": "The Cesium app itself is in flash and has to be deleted by hand: [2nd] [+] > 2:Mem Mgmt/Del > Apps, put the cursor on Cesium and press [del]." }
+        "text": "Cesium itself is a flash application and cannot be deleted over the cable, so remove it by hand: [2nd] [+], 2:Mem Mgmt/Del, Apps, cursor on Cesium, [del]." }
     ]
   }
 }
 ```
 
+Two details in there are worth copying rather than guessing at.
+
+**The type is `prot_prgm`, not `program`.** The CE toolchain emits protected
+programs, and most `.8xp` files you download are one. On an `upload` the linter
+catches a wrong guess by reading the real 8x header — but a `remove` has no file
+to check against, so a wrong type there would silently fail to delete anything:
+the calculator would look for a plain program of that name and not find one.
+
+**The version came out of the binary.** `strings` on the installer prints
+`Cesium Installer Version 3.7.0`. Getting this wrong is not cosmetic — it is
+what the Updates panel compares, so too low never offers a real update and too
+high offers a phantom one for ever.
+
 `update` is left out, so it falls back to `install` — which re-uploads and
 re-shows the "run prgmCESIUM" message. That is exactly right for an upgrade.
 
-**Cesium is not vendored in this repository yet.** Download `CESIUM.8xp` from
-[the Cesium releases](https://github.com/mateoconlechuga/cesium/releases), put
-it in `apps/cesium/`, write the manifest above, and run the two tools below.
+Cesium is vendored in `apps/cesium/`. To move it to a new release, drop the new
+`.8xp` in, update `version` from what the installer prints, and run the two
+tools below.
 
 ## After changing anything
 

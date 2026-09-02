@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "id": "cesium",
+  "name": "Cesium",
+  "kind": "system",
+  "category": "system",
+  "version": "3.7.0",
+  "summary": "A GUI shell for running programs on the calculator.",
+  "description": "Cesium is a shell: it lists the programs on your calculator, runs them whether or not they are archived, and can hide, rename and lock them. Most C programs expect a shell to launch them from.\n\nWhat this installs is the installer. CESIUM is an ordinary program, and running it once is what creates the Cesium application under [apps]. That is why Cesium is listed as a system update even though nothing here needs prgmBLUEUP: it is finished on the calculator rather than over the cable.",
+  "author": "Matt Waltz",
+  "homepage": "https://github.com/mateoconlechuga/cesium",
+  "vendored": {
+    "source": "https://github.com/mateoconlechuga/cesium",
+    "file": "cesium_english.zx0.8xp",
+    "note": "The English build. The version above is the string the installer prints: \"Cesium Installer Version 3.7.0\"."
+  },
+  "dependencies": [],
+  "actions": {
+    "install": [
+      {
+        "do": "upload",
+        "file": "cesium_english.zx0.8xp",
+        "name": "CESIUM",
+        "type": "prot_prgm",
+        "archive": true
+      },
+      {
+        "do": "message",
+        "when": "post",
+        "level": "action",
+        "text": "Run prgmCESIUM once to finish installing Cesium. Quit BlueObject, press [prgm], choose CESIUM and press [enter]. It will tell you when it is done, and Cesium then appears under [apps]."
+      }
+    ],
+    "uninstall": [
+      {
+        "do": "remove",
+        "name": "CESIUM",
+        "type": "prot_prgm"
+      },
+      {
+        "do": "message",
+        "when": "post",
+        "level": "action",
+        "text": "The installer has been removed. Cesium itself is a flash application and cannot be deleted over the cable, so remove it by hand: [2nd] [+], 2:Mem Mgmt/Del, Apps, put the cursor on Cesium and press [del]."
+      }
+    ]
+  }
+}

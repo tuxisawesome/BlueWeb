@@ -298,6 +298,52 @@ export class Session {
   }
 }
 
+/**
+ * Sort what is on the calculator against what the index claims.
+ *
+ * Three kinds, and only the third is interesting. `owned` is what a package
+ * installed and the index knows about. `system` is BlueObject's own furniture,
+ * which is reserved and never a package's business. `stray` is everything else
+ * -- files an interrupted install left behind, things sent across by hand,
+ * saves a game made for itself.
+ *
+ * Strays are not a fault and are not offered for deletion wholesale. A saved
+ * game is a stray, and so is a program somebody sent over with TI Connect and
+ * would be annoyed to lose. They are shown so the user can decide.
+ */
+export function classifyVariables(present, packages) {
+  const owners = new Map();
+  for (const pkg of packages) {
+    for (const file of pkg.files) owners.set(file.name, pkg);
+  }
+
+  const owned = [];
+  const system = [];
+  const stray = [];
+
+  for (const variable of present) {
+    if (owners.has(variable.name)) {
+      owned.push({ ...variable, owner: owners.get(variable.name) });
+    } else if (variable.name.startsWith('BLUE')) {
+      system.push(variable);
+    } else {
+      stray.push(variable);
+    }
+  }
+
+  /* And the other direction: the index claims files the calculator does not
+   * have. That is a package that was interrupted, or one whose files were
+   * deleted from the calculator's own menus. */
+  const here = new Set(present.map((v) => v.name));
+  const missing = [];
+  for (const pkg of packages) {
+    const gone = pkg.files.filter((f) => !here.has(f.name));
+    if (gone.length) missing.push({ package: pkg, files: gone });
+  }
+
+  return { owned, system, stray, missing };
+}
+
 /** Human-readable name for a variable type, for the Device panel. */
 export function describeType(type) {
   return TYPE_NAMES[type] || `type 0x${type.toString(16)}`;

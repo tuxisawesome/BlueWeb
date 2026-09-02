@@ -8,10 +8,11 @@
 
 import { planRemoval, orphansAfter, dependentsOf } from '../deps.js';
 import { ask, progress, showMessages, notice, el } from '../ui.js';
-import { describeType } from '../install.js';
+import { describeType, classifyVariables } from '../install.js';
 
 let getSession = null;
 let onChanged = null;
+let contents = null;   /* what LIST last reported, or null if unsupported */
 
 const KB = 1024;
 const kb = (bytes) => `${(bytes / KB).toFixed(bytes < 10 * KB ? 1 : 0)} KB`;
@@ -182,6 +183,79 @@ async function remove(id) {
   onChanged?.();
 }
 
+/* ------------------------------------------------------------ stray files */
+
+async function removeStray(variable) {
+  const session = getSession();
+  const answer = await ask({
+    title: `Delete ${variable.name}?`,
+    body: `Nothing in the store put this here, so nothing else knows what it `
+      + `is. It may be a saved game, or something sent across by hand. `
+      + `Deleting it frees ${kb(variable.bytes)} and cannot be undone.`,
+    actions: [
+      { id: null, label: 'Keep it' },
+      { id: 'go', label: 'Delete', kind: 'danger' },
+    ],
+  });
+  if (answer !== 'go') return;
+
+  try {
+    await session.calculator.deleteVariable(variable.name, variable.type);
+    notice(`${variable.name} deleted.`);
+  } catch (error) {
+    notice(`Could not delete ${variable.name}: ${error.message}`, 'bad');
+  }
+  onChanged?.();
+}
+
+function strayList(sorted) {
+  const wrap = el('div');
+  wrap.append(el('h2', 'category', 'Not from the store'));
+  wrap.append(el('p', 'dim',
+    'Files on the calculator that no installed package accounts for. Saved '
+    + 'games live here, and so does anything sent across by hand — so this is '
+    + 'a list to read, not a list to empty.'));
+
+  const rows = el('ul', 'plain installed');
+  for (const variable of sorted) {
+    const row = el('li');
+    const main = el('div');
+    main.append(el('strong', null, variable.name));
+    main.append(el('span', 'dim',
+      `  ${describeType(variable.type)}, ${kb(variable.bytes)}`
+      + `${variable.archived ? '' : ', in RAM'}`));
+    row.append(main);
+
+    const button = el('button', 'danger small-button', 'Delete');
+    button.addEventListener('click', () => removeStray(variable));
+    row.append(button);
+    rows.append(row);
+  }
+  wrap.append(rows);
+  return wrap;
+}
+
+function missingList(missing) {
+  const wrap = el('div');
+  wrap.append(el('h2', 'category', 'Recorded but not there'));
+  wrap.append(el('p', 'dim',
+    'The index says these were installed, but the calculator does not have '
+    + 'them. Reinstalling the package puts them back.'));
+
+  const rows = el('ul', 'plain installed');
+  for (const entry of missing) {
+    const row = el('li');
+    const main = el('div');
+    main.append(el('strong', null, entry.package.name));
+    main.append(el('div', 'dim small',
+      `missing ${entry.files.map((f) => f.name).join(', ')}`));
+    row.append(main);
+    rows.append(row);
+  }
+  wrap.append(rows);
+  return wrap;
+}
+
 /* -------------------------------------------------------------- rendering */
 
 function installedList(session) {
@@ -281,7 +355,31 @@ export function render(hello, session) {
 
   if (session) wrap.append(installedList(session));
 
+  if (session && contents) {
+    const { stray, missing } = classifyVariables(contents, session.packages);
+    const sorted = [...stray].sort((a, b) => b.bytes - a.bytes);
+    if (sorted.length) wrap.append(strayList(sorted));
+    if (missing.length) wrap.append(missingList(missing));
+  }
+
   panel.replaceChildren(wrap);
+}
+
+/**
+ * Ask the calculator what it is actually holding.
+ *
+ * Optional in both directions: an older BlueObject does not know the command
+ * and says so, which is not a failure worth reporting -- the rest of the panel
+ * is unaffected and the extra sections simply do not appear.
+ */
+export async function scan(calculator) {
+  contents = null;
+  if (!calculator) return;
+  try {
+    contents = await calculator.listVariables();
+  } catch {
+    contents = null;
+  }
 }
 
 export function init(hooks) {

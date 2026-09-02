@@ -480,6 +480,42 @@ export class Calculator {
     await this.request(CMD.SYS_END, new Uint8Array(0), slot);
   }
 
+  /**
+   * Every program and appvar on the calculator, however it got there.
+   *
+   * The index says what BlueObject installed; this says what is actually
+   * present. Pages until it has them all, because the count comes back with the
+   * first page and the calculator only sends so many at a time.
+   */
+  async listVariables() {
+    const all = [];
+    for (;;) {
+      const reply = await this.request(CMD.LIST, new Uint8Array(0), all.length);
+      const view = new DataView(reply.buffer, reply.byteOffset, reply.byteLength);
+      const total = view.getUint16(0, true);
+      const returned = reply[2];
+
+      for (let i = 0; i < returned; i++) {
+        const at = 3 + i * 12;
+        let name = '';
+        for (let c = at; c < at + 8; c++) {
+          if (reply[c] === 0 || reply[c] === 0x20) break;
+          name += String.fromCharCode(reply[c]);
+        }
+        all.push({
+          name,
+          type: reply[at + 8],
+          archived: (reply[at + 9] & 1) !== 0,
+          bytes: view.getUint16(at + 10, true),
+        });
+      }
+
+      /* No progress means the calculator has nothing more to give; stopping on
+       * that as well as on the count keeps a disagreement from spinning here. */
+      if (!returned || all.length >= total) return all;
+    }
+  }
+
   async sweep() {
     const reply = await this.request(CMD.SWEEP);
     return new DataView(reply.buffer, reply.byteOffset, reply.byteLength)

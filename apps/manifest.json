@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "revision": "2026-09-02T03:12:50Z",
+  "revision": "2026-09-02T04:44:38Z",
   "categories": [
     {
       "id": "games",
@@ -54,9 +54,9 @@
       "name": "BlueObject",
       "kind": "system",
       "category": "system",
-      "version": "1.0.2",
-      "bytes": 25264,
-      "maxFile": 17851,
+      "version": "1.1.0",
+      "bytes": 25716,
+      "maxFile": 18303,
       "deps": [
         "clibs"
       ],

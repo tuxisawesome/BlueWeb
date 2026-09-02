@@ -48,6 +48,17 @@ function refresh() {
   store.render();
 }
 
+/*
+ * Re-read what the calculator is actually holding, then redraw.
+ *
+ * Separate from refresh() because it costs a round trip or several: it is worth
+ * doing after something changes, and not on every redraw.
+ */
+async function rescan() {
+  await device.scan(calculator);
+  refresh();
+}
+
 /* -------------------------------------------------------------- connecting */
 
 /*
@@ -282,7 +293,7 @@ async function connect() {
         notice(`Could not check for interrupted installs: ${error.message}`, 'bad');
       }
     }
-    refresh();
+    await rescan();
   } catch (error) {
     if (calculator) { await calculator.close(); calculator = null; }
     session = null;
@@ -301,7 +312,7 @@ function start() {
     getSession: () => session,
     getCatalog: () => store.getCatalog(),
     getCalculator: () => calculator,
-    onChanged: refresh,
+    onChanged: rescan,
   };
   device.init(hooks);
   updates.init(hooks);

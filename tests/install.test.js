@@ -1,5 +1,5 @@
 import { test, equal, deepEqual, assert } from './harness.js';
-import { Session, InstallError } from '../js/install.js';
+import { Session, InstallError, classifyVariables } from '../js/install.js';
 import { parseIndex, buildIndex } from '../js/blueidx.js';
 import { reset as resetCatalog } from '../js/catalog.js';
 
@@ -466,4 +466,68 @@ test('a name this calculator cannot handle is reported, not thrown', async () =>
   deepEqual(check.unsupported, ['LibLoad'],
     'the offending name is named, so the page can say what to do about it');
   assert(check.missing.includes('LibLoad'), 'and it counts as absent');
+});
+
+
+/* ------------------------------------------------- what is actually there */
+
+test('sorts what is present against what the index claims', () => {
+  const packages = [{
+    id: '2048', version: '2.2.0', name: '2048', kind: 0,
+    explicit: true, installing: false, deps: ['clibs'],
+    files: [{ name: 'CE2048', type: 0x06, archived: true, bytes: 18549 }],
+  }];
+
+  const present = [
+    { name: 'CE2048', type: 0x06, archived: true, bytes: 18549 },
+    { name: 'CE2048SV', type: 0x15, archived: true, bytes: 300 },
+    { name: 'BLUE', type: 0x06, archived: true, bytes: 18381 },
+    { name: 'BLUEIDX', type: 0x15, archived: true, bytes: 200 },
+    { name: 'MYNOTES', type: 0x06, archived: false, bytes: 40 },
+  ];
+
+  const { owned, system, stray, missing } = classifyVariables(present, packages);
+
+  deepEqual(owned.map((v) => v.name), ['CE2048']);
+  deepEqual(system.map((v) => v.name), ['BLUE', 'BLUEIDX']);
+  /*
+   * A saved game the program made itself, and a program sent across by hand.
+   * Both are strays and neither is rubbish -- which is why they are listed
+   * rather than swept.
+   */
+  deepEqual(stray.map((v) => v.name), ['CE2048SV', 'MYNOTES']);
+  deepEqual(missing, []);
+});
+
+test('files the index claims but the calculator does not have', () => {
+  /*
+   * Exactly the state a half-finished install leaves, and the one an earlier
+   * uninstall bug left behind: the row says two files, only one is there.
+   */
+  const packages = [{
+    id: 'clibs', version: '15.0.0', name: 'C Libraries', kind: 0,
+    explicit: false, installing: true, deps: [],
+    files: [
+      { name: 'GRAPHX', type: 0x15, archived: true, bytes: 11354 },
+      { name: 'LibLoad', type: 0x15, archived: true, bytes: 1131 },
+    ],
+  }];
+
+  const { missing, stray } = classifyVariables(
+    [{ name: 'GRAPHX', type: 0x15, archived: true, bytes: 11354 }], packages);
+
+  equal(missing.length, 1);
+  equal(missing[0].package.id, 'clibs');
+  deepEqual(missing[0].files.map((f) => f.name), ['LibLoad']);
+  deepEqual(stray, [], 'what is there is accounted for');
+});
+
+test('an orphaned file with no index row anywhere is a stray', () => {
+  /*
+   * What the uninstall bug produced: the row was removed, the files stayed. The
+   * point of listing is that these stop being invisible.
+   */
+  const { stray } = classifyVariables(
+    [{ name: 'CE2048', type: 0x06, archived: true, bytes: 18549 }], []);
+  deepEqual(stray.map((v) => v.name), ['CE2048']);
 });

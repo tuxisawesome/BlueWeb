@@ -14,8 +14,8 @@ the apps it offers.
 
 ## Where this is up to
 
-Connecting works and the Device panel is real. The Store, Updates and Settings
-panels are scaffolding.
+The Store, Updates and Device panels all work against a real calculator.
+Settings is the last piece.
 
 | | |
 |---|---|
@@ -23,12 +23,10 @@ panels are scaffolding.
 | ✅ | the Device panel: model, OS, free space, largest installable file |
 | ✅ | the catalogue, the `BLUEIDX` index, versions, dependencies, action lists |
 | ✅ | installing and removing, with pre-flight and recoverable interruptions |
-| ⬜ | the Store and app pages |
-| ⬜ | the Updates panel |
+| ✅ | the Store, app pages, search, the Updates panel, removal from Device |
 | ⬜ | the sync password |
 
-Everything under the Store is written and tested. What is missing is the screens
-on top of it.
+The store works end to end. What is left is the password in Settings.
 
 ## Running it
 

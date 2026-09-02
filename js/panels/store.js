@@ -1,0 +1,293 @@
+/*
+ * The App Store: the catalogue, one app's page, and the install flow.
+ */
+
+import { loadCatalog, loadManifest, search } from '../catalog.js';
+import { resolveInstall, DependencyError } from '../deps.js';
+import { compareVersions } from '../version.js';
+import { ask, progress, showMessages, notice, el } from '../ui.js';
+
+let catalog = null;
+let onChanged = null;
+let getSession = null;
+
+const KB = 1024;
+const kb = (bytes) => `${(bytes / KB).toFixed(bytes < 10 * KB ? 1 : 0)} KB`;
+
+/* ------------------------------------------------------------- the install */
+
+/**
+ * Show what installing would involve, and let the user decide.
+ *
+ * Everything the resolver pulled in is listed with the reason it is there. A
+ * dialog that said only "install Snake?" and then quietly put three other
+ * things on the calculator would be lying by omission.
+ */
+async function confirmPlan(entry, plan, session) {
+  const body = el('div');
+
+  const rows = el('ul', 'plain');
+  for (const item of plan.order) {
+    const why = plan.reasons.get(item.id);
+    const existing = session.find(item.id);
+
+    const row = el('li');
+    row.append(el('strong', null, `${item.name} ${item.version}`));
+    if (existing) {
+      row.append(el('span', 'dim', `  updating from ${existing.version}`));
+    } else if (why?.requiredBy) {
+      const needed = catalog.byId.get(why.requiredBy);
+      row.append(el('span', 'dim', `  required by ${needed?.name || why.requiredBy}`));
+    }
+    rows.append(row);
+  }
+  body.append(rows);
+
+  const total = plan.order.reduce((sum, item) => sum + (item.bytes || 0), 0);
+  const free = session.calculator.hello?.freeArchive ?? 0;
+  body.append(el('p', 'dim',
+    `${kb(total)} to transfer. ${kb(free)} free, ${kb(Math.max(0, free - total))} after.`));
+
+  /* A system package ends with the user having to leave the page and do
+   * something on the calculator, which is worth saying before they start. */
+  if (plan.order.some((item) => item.kind === 'system')) {
+    body.append(el('p', 'warn',
+      'This includes a system update. When it finishes you will need to quit '
+      + 'BlueObject and run a program on the calculator to complete it.'));
+  }
+
+  const tooBig = plan.order.filter((item) =>
+    item.maxFile > (session.calculator.hello?.maxVarBytes ?? Infinity));
+  if (tooBig.length) {
+    body.append(el('p', 'bad',
+      `${tooBig.map((t) => t.name).join(', ')} contains a file larger than this `
+      + `calculator can build in RAM, and cannot be installed.`));
+  }
+
+  const answer = await ask({
+    title: plan.order.length === 1
+      ? `Install ${entry.name}?`
+      : `Install ${entry.name} and ${plan.order.length - 1} more?`,
+    body,
+    actions: tooBig.length
+      ? [{ id: null, label: 'Close' }]
+      : [
+        { id: 'go', label: 'Install', kind: 'primary' },
+        { id: null, label: 'Cancel' },
+      ],
+  });
+  return answer === 'go';
+}
+
+async function install(entry) {
+  const session = getSession();
+  if (!session) {
+    notice('Connect a calculator first.', 'bad');
+    return;
+  }
+
+  let plan;
+  try {
+    /* Manifests for anything in the graph, so version ranges are real rather
+     * than assumed from the catalogue index. */
+    const manifests = new Map();
+    for (const app of catalog.apps) {
+      if (app.id === entry.id || (entry.deps || []).includes(app.id)) {
+        manifests.set(app.id, await loadManifest(catalog, app.id));
+      }
+    }
+    plan = resolveInstall(catalog, session.packages, entry.id, manifests);
+  } catch (error) {
+    notice(error instanceof DependencyError
+      ? error.message
+      : `Could not work out what ${entry.name} needs: ${error.message}`, 'bad');
+    return;
+  }
+
+  if (!plan.order.length) {
+    notice(`${entry.name} is already installed and up to date.`);
+    return;
+  }
+
+  if (!await confirmPlan(entry, plan, session)) return;
+
+  const bar = progress(`Installing ${entry.name}`);
+  session.messages.length = 0;
+
+  try {
+    for (const item of plan.order) {
+      bar.say(`${item.name} ${item.version}`);
+      bar.fraction(null);
+      await session.apply(item.id, {
+        explicit: item.id === entry.id,
+        onProgress: ({ file, sent, size }) => {
+          bar.say(`${item.name}: ${file}`);
+          bar.fraction(size ? sent / size : null);
+        },
+      });
+    }
+    bar.close();
+    await showMessages(session.messages);
+    notice(`${entry.name} installed.`);
+  } catch (error) {
+    bar.close();
+    notice(`Could not install ${entry.name}: ${error.message}`, 'bad');
+  }
+
+  onChanged?.();
+}
+
+/* ---------------------------------------------------------------- the page */
+
+function appPage(entry) {
+  const page = el('div', 'app-page');
+
+  const back = el('button', 'link', '← All apps');
+  back.addEventListener('click', () => render());
+  page.append(back);
+
+  const head = el('div', 'app-head');
+  head.append(el('h2', null, entry.name));
+  head.append(el('span', 'dim', `${entry.version} · ${kb(entry.bytes)}`));
+  page.append(head);
+
+  const session = getSession();
+  const installed = session?.find(entry.id);
+
+  const actions = el('div', 'app-actions');
+  const button = el('button', 'primary');
+
+  if (!session) {
+    button.textContent = 'Install';
+    button.disabled = true;
+    button.title = 'Connect a calculator first';
+  } else if (!installed) {
+    button.textContent = 'Install';
+  } else if (compareVersions(entry.version, installed.version) > 0) {
+    button.textContent = `Update to ${entry.version}`;
+  } else {
+    button.textContent = 'Installed';
+    button.disabled = true;
+  }
+  button.addEventListener('click', () => install(entry));
+  actions.append(button);
+
+  if (installed) {
+    actions.append(el('span', 'dim', `Version ${installed.version} is on the calculator.`));
+  }
+  page.append(actions);
+
+  page.append(el('p', null, entry.summary || ''));
+
+  /* The full description lives in the package manifest, so it arrives after
+   * the page does. */
+  const detail = el('div', 'app-detail');
+  page.append(detail);
+  loadManifest(catalog, entry.id).then((manifest) => {
+    if (manifest.description) {
+      for (const paragraph of manifest.description.split('\n\n')) {
+        detail.append(el('p', null, paragraph));
+      }
+    }
+    const facts = el('dl');
+    if (manifest.author) facts.append(el('dt', null, 'Author'), el('dd', null, manifest.author));
+    if (entry.deps?.length) {
+      facts.append(el('dt', null, 'Needs'), el('dd', null, entry.deps
+        .map((id) => catalog.byId.get(id)?.name || id).join(', ')));
+    }
+    facts.append(el('dt', null, 'Largest file'), el('dd', null, kb(entry.maxFile)));
+    detail.append(facts);
+  }).catch((error) => {
+    detail.append(el('p', 'bad', `Could not load the details: ${error.message}`));
+  });
+
+  return page;
+}
+
+/* ---------------------------------------------------------------- the list */
+
+function card(entry) {
+  const session = getSession();
+  const installed = session?.find(entry.id);
+
+  const node = el('button', 'card');
+  node.append(el('span', 'card-name', entry.name));
+  node.append(el('span', 'card-summary', entry.summary || ''));
+
+  const foot = el('span', 'card-foot');
+  foot.append(el('span', 'dim', entry.version));
+  if (installed) {
+    foot.append(el('span',
+      compareVersions(entry.version, installed.version) > 0 ? 'tag update' : 'tag',
+      compareVersions(entry.version, installed.version) > 0 ? 'Update' : 'Installed'));
+  }
+  node.append(foot);
+
+  node.addEventListener('click', () => show(appPage(entry)));
+  return node;
+}
+
+function show(node) {
+  const panel = document.getElementById('panel-store');
+  panel.replaceChildren(node);
+}
+
+export function render(query = '') {
+  const panel = document.getElementById('panel-store');
+  if (!catalog) {
+    panel.replaceChildren(el('p', 'placeholder', 'Loading the catalogue…'));
+    return;
+  }
+
+  const wrap = el('div');
+
+  const box = el('input', 'search');
+  box.type = 'search';
+  box.placeholder = 'Search apps';
+  box.value = query;
+  box.addEventListener('input', () => render(box.value));
+  wrap.append(box);
+
+  const matches = search(catalog, query);
+  if (!matches.length) {
+    wrap.append(el('p', 'placeholder', `Nothing matches "${query}".`));
+    show(wrap);
+    return;
+  }
+
+  for (const category of catalog.categories) {
+    const inCategory = matches.filter((a) => a.category === category.id);
+    if (!inCategory.length) continue;
+
+    wrap.append(el('h2', 'category', category.name));
+    const grid = el('div', 'grid');
+    for (const entry of inCategory) grid.append(card(entry));
+    wrap.append(grid);
+  }
+
+  show(wrap);
+  /* Put the caret back where it was; replaceChildren threw the old box away. */
+  if (query) {
+    const fresh = wrap.querySelector('.search');
+    fresh.focus();
+    fresh.setSelectionRange(query.length, query.length);
+  }
+}
+
+export async function init(hooks) {
+  getSession = hooks.getSession;
+  onChanged = hooks.onChanged;
+
+  try {
+    catalog = await loadCatalog();
+    render();
+  } catch (error) {
+    document.getElementById('panel-store').replaceChildren(
+      el('p', 'bad', `Could not load the catalogue: ${error.message}`));
+  }
+  return catalog;
+}
+
+export function getCatalog() {
+  return catalog;
+}

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BlueWeb</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<header>
+  <h1>BlueWeb</h1>
+  <nav id="tabs">
+    <button data-panel="store" class="active">Store</button>
+    <button data-panel="updates">Updates</button>
+    <button data-panel="device">Device</button>
+    <button data-panel="settings">Settings</button>
+  </nav>
+  <div id="connection">
+    <span id="status" class="status">Not connected</span>
+    <button id="connect">Connect calculator</button>
+  </div>
+</header>
+
+<main>
+  <section id="panel-store" class="panel active">
+    <p class="placeholder">The app store arrives in phase 3.</p>
+  </section>
+
+  <section id="panel-updates" class="panel">
+    <p class="placeholder">The updates panel arrives in phase 4.</p>
+  </section>
+
+  <section id="panel-device" class="panel">
+    <div id="device-empty" class="placeholder">
+      Connect a calculator to see what is on it.
+    </div>
+    <dl id="device-facts" hidden></dl>
+  </section>
+
+  <section id="panel-settings" class="panel">
+    <p class="placeholder">Settings arrive in phase 5.</p>
+  </section>
+</main>
+
+<div id="notice" hidden></div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

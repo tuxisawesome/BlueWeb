@@ -38,7 +38,8 @@ function checkRemove(action, where) {
   if (typeof action.name !== 'string' || !action.name) {
     throw new ActionError(`${where}: a "remove" needs a "name"`);
   }
-  if (!/^[A-Z][A-Z0-9]{0,7}$/.test(action.name)) {
+  /* Mixed case after the first letter: see isValidName in tifile.js. */
+  if (!/^[A-Z][A-Za-z0-9]{0,7}$/.test(action.name)) {
     throw new ActionError(
       `${where}: "${action.name}" is not a name the calculator will accept`);
   }

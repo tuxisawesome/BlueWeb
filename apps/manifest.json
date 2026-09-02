@@ -1,13 +1,35 @@
 {
   "schema": 1,
-  "revision": "2026-09-02T01:47:41Z",
+  "revision": "2026-09-02T02:03:57Z",
   "categories": [
+    {
+      "id": "games",
+      "name": "Games"
+    },
+    {
+      "id": "libs",
+      "name": "Libraries"
+    },
     {
       "id": "system",
       "name": "System"
     }
   ],
   "apps": [
+    {
+      "id": "2048",
+      "dir": "2048",
+      "name": "2048",
+      "kind": "app",
+      "category": "games",
+      "version": "2.2.0",
+      "bytes": 18549,
+      "maxFile": 18549,
+      "deps": [
+        "clibs"
+      ],
+      "summary": "Slide numbered tiles together until one of them reads 2048."
+    },
     {
       "id": "blueobject",
       "dir": "blueobject",
@@ -31,6 +53,18 @@
       "maxFile": 13676,
       "deps": [],
       "summary": "A GUI shell for running programs on the calculator."
+    },
+    {
+      "id": "clibs",
+      "dir": "clibs",
+      "name": "C Libraries",
+      "kind": "app",
+      "category": "libs",
+      "version": "15.0.0",
+      "bytes": 37293,
+      "maxFile": 11354,
+      "deps": [],
+      "summary": "Shared libraries that most C and ICE programs need to run."
     }
   ]
 }

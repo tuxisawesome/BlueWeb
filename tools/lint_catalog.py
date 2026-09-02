@@ -19,7 +19,9 @@ import sys
 from pathlib import Path
 
 VERSION = re.compile(r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$")
-TI_NAME = re.compile(r"^[A-Z][A-Z0-9]{0,7}$")
+# A capital first, then letters or digits of either case. The C libraries
+# are deliberately mixed case -- LibLoad -- so all-caps would reject them.
+TI_NAME = re.compile(r"^[A-Z][A-Za-z0-9]{0,7}$")
 VERBS = {"upload", "remove", "message"}
 
 TYPE_NAMES = {0x05: "program", 0x06: "protected program", 0x15: "appvar"}

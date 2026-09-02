@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "id": "clibs",
+  "name": "C Libraries",
+  "kind": "app",
+  "category": "libs",
+  "version": "15.0.0",
+  "summary": "Shared libraries that most C and ICE programs need to run.",
+  "description": "Almost every game and tool written in C or ICE for this calculator is built against these, and will not start without them. They are loaded on demand by LibLoad, so installing the whole set costs about 37 KB of archive once and nothing after that.\n\nGRAPHX draws, KEYPADC reads the keypad, FILEIOC reads and writes files, FONTLIBC draws text. The DRVCE ones talk to USB — SRLDRVCE is a serial port, MSDDRVCE and FATDRVCE a USB drive, USBDRVCE and LCDDRVCE the hardware underneath.\n\nIf a program says it needs the C libraries, this is what it means.",
+  "author": "CE-Programming",
+  "homepage": "https://github.com/CE-Programming/libraries",
+  "vendored": {
+    "source": "https://github.com/CE-Programming/libraries",
+    "ref": "v15"
+  },
+  "dependencies": [],
+  "actions": {
+    "install": [
+      { "do": "upload", "file": "libload.8xv", "name": "LibLoad", "type": "appvar", "archive": true },
+      { "do": "upload", "file": "graphx.8xv", "name": "GRAPHX", "type": "appvar", "archive": true },
+      { "do": "upload", "file": "keypadc.8xv", "name": "KEYPADC", "type": "appvar", "archive": true },
+      { "do": "upload", "file": "fileioc.8xv", "name": "FILEIOC", "type": "appvar", "archive": true },
+      { "do": "upload", "file": "fontlibc.8xv", "name": "FONTLIBC", "type": "appvar", "archive": true },
+      { "do": "upload", "file": "usbdrvce.8xv", "name": "USBDRVCE", "type": "appvar", "archive": true },
+      { "do": "upload", "file": "srldrvce.8xv", "name": "SRLDRVCE", "type": "appvar", "archive": true },
+      { "do": "upload", "file": "msddrvce.8xv", "name": "MSDDRVCE", "type": "appvar", "archive": true },
+      { "do": "upload", "file": "fatdrvce.8xv", "name": "FATDRVCE", "type": "appvar", "archive": true },
+      { "do": "upload", "file": "lcddrvce.8xv", "name": "LCDDRVCE", "type": "appvar", "archive": true }
+    ],
+    "uninstall": [
+      {
+        "do": "message",
+        "when": "pre",
+        "level": "action",
+        "text": "Anything on this calculator written in C or ICE needs these to start, whether or not BlueObject knows it was installed. If a game stops working after this, reinstalling the C Libraries is the fix."
+      }
+    ]
+  }
+}

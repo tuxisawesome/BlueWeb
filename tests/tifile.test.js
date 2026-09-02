@@ -40,3 +40,19 @@ test('names the calculator will and will not accept', () => {
   deepEqual(['', 'snake', '1SNAKE', 'ABCDEFGHI', 'A B'].map(isValidName),
     [false, false, false, false, false]);
 });
+
+test('mixed case after the first letter is allowed', () => {
+  /*
+   * Not a nicety. The C libraries are named this way deliberately -- lowercase
+   * keeps them out of reach of the homescreen, where they could be renamed or
+   * deleted by accident -- and LibLoad is what nearly every C and ICE program
+   * on the calculator loads itself through. An all-caps rule made the most
+   * depended-on package in the store impossible to install, with an error
+   * blaming the name.
+   */
+  deepEqual(['LibLoad', 'GRAPHX', 'CE2048SV'].map(isValidName),
+    [true, true, true]);
+
+  /* The first character still has to be a capital, which is TI's own rule. */
+  deepEqual(['libload', 'lowerFirst'].map(isValidName), [false, false]);
+});

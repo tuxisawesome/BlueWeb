@@ -44,9 +44,18 @@ export const TYPE_BY_NAME = {
  */
 export const MAX_VAR_SIZE = 65512;
 
-/** Is this a name TI-OS will accept? */
+/**
+ * Is this a name TI-OS will accept?
+ *
+ * A capital first, then up to seven more letters or digits of either case.
+ * The mixed case is not a nicety: the C libraries are named that way on
+ * purpose -- LibLoad is spelled exactly like that -- because lowercase keeps
+ * them out of reach of the homescreen, where they could be renamed or deleted
+ * by accident. Requiring all caps here would make the most depended-on package
+ * in the store impossible to install.
+ */
 export function isValidName(name) {
-  return /^[A-Z][A-Z0-9]{0,7}$/.test(name);
+  return /^[A-Z][A-Za-z0-9]{0,7}$/.test(name);
 }
 
 /**

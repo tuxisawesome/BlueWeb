@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "id": "2048",
+  "name": "2048",
+  "kind": "app",
+  "category": "games",
+  "version": "2.2.0",
+  "summary": "Slide numbered tiles together until one of them reads 2048.",
+  "description": "The sliding block puzzle by Gabriele Cirulli, on your calculator. Slide the grid with the arrow keys; tiles with the same number merge and add up. Reaching 2048 is the goal, but you can keep going.\n\nGames save themselves as you play, so quitting mid-game loses nothing.\n\nArrows move, [trace] undoes the last move when it can, [graph] starts again, and [clear] leaves.",
+  "author": "Pi_Runner",
+  "homepage": "https://www.cemetech.net/downloads/files/1719",
+  "dependencies": [
+    { "id": "clibs", "version": ">=15.0.0" }
+  ],
+  "actions": {
+    "install": [
+      { "do": "upload", "file": "CE2048.8xp", "name": "CE2048", "type": "prot_prgm", "archive": true }
+    ],
+    "uninstall": [
+      {
+        "do": "message",
+        "when": "post",
+        "level": "info",
+        "text": "Your saved game is in an appvar called CE2048SV, which the game made itself. It has been left alone, so reinstalling picks up where you stopped. Delete it by hand from [2nd] [+] if you would rather start over."
+      }
+    ]
+  }
+}

@@ -14,8 +14,8 @@ the apps it offers.
 
 ## Where this is up to
 
-The Store, Updates and Device panels all work against a real calculator.
-Settings is the last piece.
+Everything works against a real calculator: browsing, installing, updating,
+removing, and the sync password.
 
 | | |
 |---|---|
@@ -24,9 +24,9 @@ Settings is the last piece.
 | ✅ | the catalogue, the `BLUEIDX` index, versions, dependencies, action lists |
 | ✅ | installing and removing, with pre-flight and recoverable interruptions |
 | ✅ | the Store, app pages, search, the Updates panel, removal from Device |
-| ⬜ | the sync password |
+| ✅ | the sync password |
 
-The store works end to end. What is left is the password in Settings.
+All five panels work against a real calculator.
 
 ## Running it
 
@@ -40,6 +40,27 @@ Then open <http://localhost:8080>.
 from `file://`, so a double-clicked `index.html` would show an empty catalogue
 and no reason why. The page detects that case and says so rather than looking
 broken.
+
+## The sync password
+
+Settings can put a password on a calculator, and BlueWeb asks for it whenever
+that calculator is connected.
+
+Be clear about what it is. It does not protect what is stored on the calculator
+— anyone holding it can read its files from the calculator's own memory menu.
+What it protects is the relationship between the calculator and a computer:
+without it, nothing can be installed, removed or updated.
+
+The way past it is to delete BlueObject's index, and that costs the entire
+record of what is installed and which files belong to which app. That cost is
+the deterrent, not secrecy.
+
+The password itself never crosses the cable. The browser hashes it, the
+calculator stores only the digest, and unlocking answers a fresh challenge each
+time, so a recorded exchange cannot be replayed. The calculator counts wrong
+answers and keeps the count across power cycles — it cannot rate-limit anybody,
+since pulling the batteries would defeat that, but it can tell whoever does get
+in how many there have been.
 
 ## Requirements
 

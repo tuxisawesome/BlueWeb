@@ -154,3 +154,14 @@ ul.installed label { display: flex; gap: 10px; align-items: start; cursor: point
 }
 #notice.bad { border-color: var(--bad); }
 #notice.action { border-color: var(--warn); }
+
+.field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+.field label { color: var(--dim); font-size: 13px; }
+.field input {
+  padding: 8px 10px; background: var(--raised); color: var(--fg);
+  border: 1px solid var(--line); border-radius: 6px; font: inherit;
+}
+.field input:focus { outline: none; border-color: var(--accent); }
+
+.explain { margin-top: 32px; border-top: 1px solid var(--line); padding-top: 8px; }
+.explain p { max-width: 62ch; }

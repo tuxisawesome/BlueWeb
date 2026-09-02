@@ -16,6 +16,7 @@ import {
   USB_VENDOR_ID, USB_PRODUCT_ID,
 } from './proto.js';
 import { crc32 } from './crc32.js';
+import { challengeResponse, storedHash, randomSalt } from './sha256.js';
 
 const BAUD_RATE = 115200;
 const REPLY_TIMEOUT_MS = 30000;
@@ -58,6 +59,7 @@ export class Calculator {
     this.seq = 0;
     this.pending = new Uint8Array(0);
     this.hello = null;
+    this.authed = false;
     /* Called when the calculator says it is defragmenting, so the UI can
      * explain why nothing is happening for possibly quite a while. */
     this.onBusy = null;
@@ -244,6 +246,55 @@ export class Calculator {
 
   async bye() {
     await this.request(CMD.BYE);
+  }
+
+  /* ---------------------------------------------------------------- auth */
+
+  /**
+   * Answer the calculator's challenge.
+   *
+   * The salt comes back in the clear, which is fine: a salt's job is to defeat
+   * precomputed tables and to stop the same password producing the same bytes
+   * on two calculators. The hash is the sensitive half and it never leaves the
+   * device -- INDEX_GET zeroes the device block -- so knowing the salt alone
+   * buys nothing. A guess has to be submitted, one at a time, into a counter
+   * the calculator records.
+   *
+   * Returns the number of failed attempts the calculator has seen, which is
+   * worth showing to whoever does get in.
+   */
+  async authenticate(password) {
+    const challenge = await this.request(CMD.AUTH_BEGIN);
+    if (challenge.length < 32) {
+      throw new Error('the calculator sent a challenge this page cannot read');
+    }
+    const salt = challenge.subarray(0, 16);
+    const nonce = challenge.subarray(16, 32);
+
+    const reply = await this.request(
+      CMD.AUTH, await challengeResponse(salt, nonce, password));
+    this.authed = true;
+    return reply[0] ?? 0;
+  }
+
+  /** Set the sync password, or clear it. */
+  async setPassword(password) {
+    if (password === null) {
+      await this.request(CMD.PW_SET, new Uint8Array(0), 0);
+      if (this.hello) this.hello.password = false;
+      return;
+    }
+
+    const salt = randomSalt();
+    const hash = await storedHash(salt, password);
+
+    const payload = new Uint8Array(salt.length + hash.length);
+    payload.set(salt, 0);
+    payload.set(hash, salt.length);
+
+    await this.request(CMD.PW_SET, payload, 1);
+    if (this.hello) this.hello.password = true;
+    this.authed = true;
   }
 
   /* --------------------------------------------------------------- index */

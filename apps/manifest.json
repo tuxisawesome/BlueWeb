@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "revision": "2026-09-02T01:39:02Z",
+  "revision": "2026-09-02T01:43:00Z",
   "categories": [
     {
       "id": "system",
@@ -15,8 +15,8 @@
       "kind": "system",
       "category": "system",
       "version": "1.0.0",
-      "bytes": 22241,
-      "maxFile": 14828,
+      "bytes": 25263,
+      "maxFile": 17850,
       "deps": [],
       "summary": "The calculator companion this store installs through."
     }

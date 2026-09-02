@@ -15,6 +15,7 @@ import { notice, clearNotice, ask, el } from './ui.js';
 import * as store from './panels/store.js';
 import * as device from './panels/device.js';
 import * as updates from './panels/updates.js';
+import * as settings from './panels/settings.js';
 
 let calculator = null;
 let session = null;
@@ -43,6 +44,7 @@ function showPanel(name) {
 function refresh() {
   device.render(calculator?.hello ?? null, session);
   updates.render();
+  settings.render();
   store.render();
 }
 
@@ -68,6 +70,52 @@ function describeConnectError(error) {
       + 'be in the "dialout" group; log out and back in after adding it.';
   }
   return error?.message || String(error);
+}
+
+/*
+ * Ask for the password, and keep asking until it is right or the user gives up.
+ *
+ * The calculator counts wrong answers and keeps the count across power cycles.
+ * It cannot rate-limit anybody -- pulling the batteries would defeat that -- so
+ * what it does instead is tell whoever does get in how many there have been,
+ * which is the useful thing a calculator can actually offer.
+ */
+async function askForPassword(hello) {
+  for (;;) {
+    const field = el('input');
+    field.type = 'password';
+    field.autocomplete = 'off';
+
+    const body = el('div');
+    body.append(el('p', null, 'This calculator asks for a password before it '
+      + 'will let anything be changed.'));
+    const wrap = el('div', 'field');
+    wrap.append(el('label', null, 'Password'), field);
+    body.append(wrap);
+
+    const answer = await ask({
+      title: 'Password',
+      body,
+      actions: [
+        { id: 'go', label: 'Unlock', kind: 'primary' },
+        { id: null, label: 'Cancel' },
+      ],
+    });
+    if (answer !== 'go') return false;
+
+    try {
+      const failures = await calculator.authenticate(field.value);
+      if (failures) {
+        notice(`Unlocked. There have been ${failures} wrong `
+          + `password${failures === 1 ? '' : 's'} since the last time someone `
+          + `got in.`, 'action');
+      }
+      hello.authFailures = 0;
+      return true;
+    } catch (error) {
+      notice(error.message, 'bad');
+    }
+  }
 }
 
 /*
@@ -155,6 +203,17 @@ async function connect() {
     setStatus(`BlueObject ${hello.version || '?'}`, 'connected');
     button.textContent = 'Disconnect';
 
+    /*
+     * Before anything else that would be refused. HELLO is deliberately not
+     * gated, so the page can find out a password is wanted rather than sitting
+     * there until every later command times out.
+     */
+    if (hello.password && !await askForPassword(hello)) {
+      notice('Not unlocked, so nothing on this calculator can be changed.');
+      refresh();
+      return;
+    }
+
     if (hello.hasIndex) {
       await session.load();
     } else if (!await offerToInitialise()) {
@@ -203,10 +262,12 @@ function start() {
   const hooks = {
     getSession: () => session,
     getCatalog: () => store.getCatalog(),
+    getCalculator: () => calculator,
     onChanged: refresh,
   };
   device.init(hooks);
   updates.init(hooks);
+  settings.init(hooks);
 
   for (const button of document.querySelectorAll('#tabs button')) {
     button.addEventListener('click', () => showPanel(button.dataset.panel));
@@ -215,9 +276,6 @@ function start() {
 
   const wanted = location.hash.slice(1);
   showPanel(PANELS.includes(wanted) ? wanted : 'store');
-
-  document.getElementById('panel-settings').replaceChildren(
-    el('p', 'placeholder', 'The sync password arrives in the next phase.'));
 
   if (location.protocol === 'file:') {
     notice('Opened from a file rather than a server, so the app catalogue '

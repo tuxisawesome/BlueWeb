@@ -7,5 +7,6 @@ import './tifile.test.js';
 import './blueidx.test.js';
 import './actions.test.js';
 import './deps.test.js';
+import './install.test.js';
 
 run();

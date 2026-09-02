@@ -12,9 +12,10 @@
 
 import {
   PROTO_VERSION, CMD, STATUS, STATUS_TEXT, FLAG,
-  HEADER_SIZE, HELLO_SIZE, ARMED_RECORD, VERSION_CHARS,
+  HEADER_SIZE, HELLO_SIZE, ARMED_RECORD, VERSION_CHARS, CHUNK_SIZE,
   USB_VENDOR_ID, USB_PRODUCT_ID,
 } from './proto.js';
+import { crc32 } from './crc32.js';
 
 const BAUD_RATE = 115200;
 const REPLY_TIMEOUT_MS = 30000;
@@ -243,5 +244,136 @@ export class Calculator {
 
   async bye() {
     await this.request(CMD.BYE);
+  }
+
+  /* --------------------------------------------------------------- index */
+
+  /**
+   * The index as the calculator holds it, with its device block zeroed.
+   *
+   * Empty means the calculator has no index yet, which is an ordinary state --
+   * a calculator that has never been set up -- and not an error.
+   */
+  async getIndex() {
+    return this.request(CMD.INDEX_GET);
+  }
+
+  /**
+   * Replace the index.
+   *
+   * The device block being sent is ignored: the calculator splices its own live
+   * one over it, so the password hash never has to travel in either direction.
+   */
+  async putIndex(bytes) {
+    await this.request(CMD.INDEX_PUT, bytes);
+  }
+
+  async setClock(unixSeconds = Math.floor(Date.now() / 1000)) {
+    const payload = new Uint8Array(4);
+    new DataView(payload.buffer).setUint32(0, unixSeconds, true);
+    await this.request(CMD.CLOCK_SET, payload);
+  }
+
+  /* ----------------------------------------------------------- variables */
+
+  /**
+   * Send one variable, chunk by chunk.
+   *
+   * The calculator builds it under a staging name and only gives it the real
+   * one once every byte has arrived and the checksum agrees, so an interrupted
+   * transfer cannot leave a half-written program behind under a name somebody
+   * might run. If this throws part-way, nothing on the calculator changed.
+   *
+   * `onProgress` is called with bytes sent so far.
+   */
+  async putVariable({ name, type, body, archive = true, owner = '' },
+                    onProgress = null) {
+    const chunkSize = this.hello?.chunkSize || CHUNK_SIZE;
+
+    if (this.hello && body.length > this.hello.maxVarBytes) {
+      /*
+       * Refused here rather than by the calculator, so the message can name the
+       * file and the limit. A variable must exist whole in RAM before it can be
+       * archived, and there is nowhere near 64 KB of that free.
+       */
+      throw new Error(`${name} is ${body.length} bytes and this calculator can `
+        + `only build ${this.hello.maxVarBytes}`);
+    }
+
+    const ownerBytes = new TextEncoder().encode(owner);
+    const begin = new Uint8Array(18 + ownerBytes.length);
+    const view = new DataView(begin.buffer);
+    for (let i = 0; i < name.length && i < 8; i++) begin[i] = name.charCodeAt(i);
+    begin[8] = type;
+    view.setUint32(9, body.length, true);
+    view.setUint32(13, crc32(body), true);
+    begin[17] = ownerBytes.length;
+    begin.set(ownerBytes, 18);
+
+    await this.request(CMD.VAR_BEGIN, begin, archive ? 1 : 0);
+
+    try {
+      let index = 0;
+      for (let at = 0; at < body.length; at += chunkSize) {
+        await this.request(CMD.VAR_CHUNK, body.subarray(at, at + chunkSize), index++);
+        if (onProgress) onProgress(Math.min(at + chunkSize, body.length), body.length);
+      }
+
+      const reply = await this.request(CMD.VAR_END);
+      const replyView = new DataView(reply.buffer, reply.byteOffset, reply.byteLength);
+      return {
+        bytes: replyView.getUint16(0, true),
+        crc: replyView.getUint32(2, true),
+      };
+    } catch (error) {
+      /*
+       * Let the calculator drop the staging variable now rather than leaving it
+       * for the next session to sweep. Best effort: if the link is already gone
+       * this cannot work, and the startup sweep is the backstop.
+       */
+      try { await this.request(CMD.VAR_ABORT); } catch { /* already gone */ }
+      throw error;
+    }
+  }
+
+  async deleteVariable(name, type) {
+    const payload = new Uint8Array(8);
+    for (let i = 0; i < name.length && i < 8; i++) payload[i] = name.charCodeAt(i);
+    try {
+      const reply = await this.request(CMD.VAR_DEL, payload, type);
+      return reply[0] === 1;
+    } catch (error) {
+      /* Already gone is the outcome that was wanted, not a failure. */
+      if (error instanceof ProtocolError && error.status === STATUS.NOT_FOUND) {
+        return false;
+      }
+      throw error;
+    }
+  }
+
+  async statVariable(name, type) {
+    const payload = new Uint8Array(8);
+    for (let i = 0; i < name.length && i < 8; i++) payload[i] = name.charCodeAt(i);
+    try {
+      const reply = await this.request(CMD.VAR_STAT, payload, type);
+      const view = new DataView(reply.buffer, reply.byteOffset, reply.byteLength);
+      return {
+        present: (reply[0] & 1) !== 0,
+        archived: (reply[0] & 2) !== 0,
+        bytes: view.getUint16(1, true),
+        crc: view.getUint32(3, true),
+      };
+    } catch (error) {
+      if (error instanceof ProtocolError && error.status === STATUS.NOT_FOUND) {
+        return { present: false, archived: false, bytes: 0, crc: 0 };
+      }
+      throw error;
+    }
+  }
+
+  async sweep() {
+    const reply = await this.request(CMD.SWEEP);
+    return new DataView(reply.buffer, reply.byteOffset, reply.byteLength)
+      .getUint16(0, true);
   }
 }

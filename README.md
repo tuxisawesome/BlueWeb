@@ -22,13 +22,13 @@ panels are scaffolding.
 | ✅ | connecting, the link protocol, error messages worth reading |
 | ✅ | the Device panel: model, OS, free space, largest installable file |
 | ✅ | the catalogue, the `BLUEIDX` index, versions, dependencies, action lists |
+| ✅ | installing and removing, with pre-flight and recoverable interruptions |
 | ⬜ | the Store and app pages |
-| ⬜ | actually installing and removing |
 | ⬜ | the Updates panel |
 | ⬜ | the sync password |
 
-The logic underneath the Store is written and tested; what is missing is the
-screens on top of it and the code that drives the link.
+Everything under the Store is written and tested. What is missing is the screens
+on top of it.
 
 ## Running it
 

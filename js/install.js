@@ -286,11 +286,15 @@ export class Session {
     if (!installed) throw new InstallError(`"${id}" is not installed`);
 
     const missing = [];
+    const unsupported = [];
     for (const file of installed.files) {
       const stat = await this.calculator.statVariable(file.name, file.type);
       if (!stat.present) missing.push(file.name);
+      /* Not merely absent: this BlueObject is too old to name it at all, which
+       * is a different problem with a different fix. */
+      if (stat.unsupported) unsupported.push(file.name);
     }
-    return { ok: missing.length === 0, missing };
+    return { ok: missing.length === 0, missing, unsupported };
   }
 }
 

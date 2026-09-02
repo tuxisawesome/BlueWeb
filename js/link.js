@@ -418,6 +418,20 @@ export class Calculator {
       if (error instanceof ProtocolError && error.status === STATUS.NOT_FOUND) {
         return { present: false, archived: false, bytes: 0, crc: 0 };
       }
+      /*
+       * An older BlueObject refusing the name outright. It cannot be holding a
+       * variable it will not even name, so this is "not there" as surely as
+       * NOT_FOUND is.
+       *
+       * Throwing here closed the connection on every connect, which took away
+       * the only route to installing the newer BlueObject that would have
+       * accepted the name: the calculator could not be fixed because it was
+       * broken.
+       */
+      if (error instanceof ProtocolError && error.status === STATUS.BAD_NAME) {
+        return { present: false, archived: false, bytes: 0, crc: 0,
+                 unsupported: true };
+      }
       throw error;
     }
   }

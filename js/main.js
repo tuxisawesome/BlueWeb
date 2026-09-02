@@ -148,26 +148,58 @@ async function offerToInitialise() {
  */
 async function offerToRepair() {
   for (const stuck of session.interrupted()) {
-    const { missing } = await session.verify(stuck.id);
-    const answer = await ask({
-      title: `${stuck.name} did not finish installing`,
-      body: missing.length
-        ? `${missing.join(', ')} never arrived. You can finish the install or `
-          + `remove what did arrive.`
-        : `Everything arrived, but the install was interrupted before it could `
-          + `be recorded. You can finish it now.`,
-      actions: [
-        { id: 'finish', label: 'Finish installing', kind: 'primary' },
-        { id: 'remove', label: 'Remove it', kind: 'danger' },
-        { id: null, label: 'Leave it' },
-      ],
-    });
-
+    /*
+     * All of this is best effort, and none of it may break the connection.
+     *
+     * Not defensiveness for its own sake. An interrupted package is by
+     * definition one the calculator had trouble with, so this is the path most
+     * likely to hit another error -- and letting it throw closed the port on
+     * every connect, which took away the only route to installing the newer
+     * BlueObject that would have fixed the original problem. The calculator
+     * could not be fixed because it was broken.
+     */
     try {
-      if (answer === 'finish') await session.apply(stuck.id, { explicit: stuck.explicit });
-      else if (answer === 'remove') await session.remove(stuck.id);
+      const { missing, unsupported } = await session.verify(stuck.id);
+
+      /*
+       * Two different problems. "Never arrived" is an interrupted transfer and
+       * finishing it is the fix. "Cannot even name it" is a BlueObject too old
+       * for the package, and finishing would fail again the same way -- so it
+       * is not offered.
+       */
+      const body = unsupported.length
+        ? `The BlueObject on this calculator is too old to handle the name `
+          + `${unsupported.join(', ')}, which is why the install stopped. `
+          + `Update BlueObject from the Store, then install this again.`
+        : missing.length
+          ? `${missing.join(', ')} never arrived. You can finish the install, `
+            + `or remove what did arrive.`
+          : `Everything arrived, but the install was interrupted before it `
+            + `could be recorded. You can finish it now.`;
+
+      const answer = await ask({
+        title: `${stuck.name} did not finish installing`,
+        body,
+        actions: unsupported.length
+          ? [
+            { id: null, label: 'Leave it' },
+            { id: 'remove', label: 'Clear it', kind: 'danger' },
+          ]
+          : [
+            { id: 'finish', label: 'Finish installing', kind: 'primary' },
+            { id: 'remove', label: 'Remove it', kind: 'danger' },
+            { id: null, label: 'Leave it' },
+          ],
+      });
+
+      if (answer === 'finish') {
+        await session.apply(stuck.id, { explicit: stuck.explicit });
+      } else if (answer === 'remove') {
+        await session.remove(stuck.id);
+      }
     } catch (error) {
-      notice(`Could not fix ${stuck.name}: ${error.message}`, 'bad');
+      notice(`Could not tidy up ${stuck.name}: ${error.message}. `
+        + `The calculator is still connected.`, 'bad');
     }
   }
 }
@@ -243,7 +275,13 @@ async function connect() {
         + 'Nothing was left half-written.');
     }
 
-    if (session.packages.length) await offerToRepair();
+    if (session.packages.length) {
+      try {
+        await offerToRepair();
+      } catch (error) {
+        notice(`Could not check for interrupted installs: ${error.message}`, 'bad');
+      }
+    }
     refresh();
   } catch (error) {
     if (calculator) { await calculator.close(); calculator = null; }

@@ -57,6 +57,11 @@ class FakeCalculator {
   }
 
   async statVariable(name) {
+    /* An older BlueObject refuses a name it cannot handle. link.js turns that
+     * into "not there, and here is why" rather than letting it escape. */
+    if (this.refuses?.has(name)) {
+      return { present: false, archived: false, bytes: 0, crc: 0, unsupported: true };
+    }
     const body = this.variables.get(name);
     return { present: !!body, archived: true, bytes: body?.length || 0, crc: 0 };
   }
@@ -429,4 +434,36 @@ test('a reserved name the page does not know about is refused', async () => {
     assert(message.includes('reserves'), `expected a refusal, got "${message}"`);
     assert(!calc.variables.has('BLUEIDX'), 'nothing was written');
   } finally { restore(); }
+});
+
+
+test('a name this calculator cannot handle is reported, not thrown', async () => {
+  /*
+   * The real failure: an older BlueObject rejected the name LibLoad, so the C
+   * libraries stalled mid-install, and every connect afterwards asked about
+   * that name again, threw, and closed the port. The calculator could not be
+   * fixed because it was broken.
+   */
+  const calc = new FakeCalculator();
+  calc.refuses = new Set(['LibLoad']);
+  calc.index = buildIndex([{
+    id: 'clibs', version: '15.0.0', name: 'C Libraries', kind: 0,
+    explicit: true, installing: true, deps: [],
+    files: [
+      { name: 'LibLoad', type: 0x15, archived: true, bytes: 1131 },
+      { name: 'GRAPHX', type: 0x15, archived: true, bytes: 11354 },
+    ],
+  }]);
+
+  const session = new Session(calc, { byId: new Map() });
+  await session.load();
+
+  deepEqual(session.interrupted().map((p) => p.id), ['clibs'],
+    'the package is still marked mid-install');
+
+  const check = await session.verify('clibs');
+  equal(check.ok, false);
+  deepEqual(check.unsupported, ['LibLoad'],
+    'the offending name is named, so the page can say what to do about it');
+  assert(check.missing.includes('LibLoad'), 'and it counts as absent');
 });

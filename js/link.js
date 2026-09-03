@@ -30,6 +30,28 @@ const REPLY_TIMEOUT_MS = 30000;
  */
 const BUSY_TIMEOUT_MS = 15 * 60 * 1000;
 
+/*
+ * The three commands that write to the archive, and the longer patience they
+ * get before the calculator has said anything.
+ *
+ * The calculator warns of a defragment before starting one, and that warning is
+ * what buys the fifteen minutes above. But the warning is eight bytes on a
+ * cable, sent moments before the operating system takes the machine away, and
+ * a plain thirty-second timeout leaves no room at all for it to be late. These
+ * are the only commands that can reach ti_SetArchiveStatus, so they are the
+ * only ones that need the slack.
+ */
+const ARCHIVE_TIMEOUT_MS = 120000;
+const ARCHIVING = new Set([CMD.VAR_END, CMD.SYS_END, CMD.INDEX_PUT]);
+
+/* What a command is called, for the log and for error messages. */
+const CMD_NAMES = Object.fromEntries(
+  Object.entries(CMD).map(([name, value]) => [value, name]));
+
+function commandName(cmd) {
+  return CMD_NAMES[cmd] || `0x${cmd.toString(16).padStart(2, '0')}`;
+}
+
 export function isSupported() {
   return typeof navigator !== 'undefined' && 'serial' in navigator;
 }
@@ -63,6 +85,24 @@ export class Calculator {
     /* Called when the calculator says it is defragmenting, so the UI can
      * explain why nothing is happening for possibly quite a while. */
     this.onBusy = null;
+    /* Called with (dir, text) for everything that crosses the cable. See
+     * log.js; null means nobody is watching and nothing is recorded. */
+    this.onLog = null;
+    /*
+     * One request in flight, enforced rather than assumed.
+     *
+     * The protocol is strict lockstep and every caller above here is supposed
+     * to respect that, but "supposed to" is not a guarantee: two overlapping
+     * flows would each read from the same `pending` buffer and take turns
+     * stealing the other's reply, which presents as a corrupted install rather
+     * than as the concurrency bug it is. This turns that into an error at the
+     * moment it happens, naming both commands.
+     */
+    this.inFlight = null;
+  }
+
+  #log(dir, text) {
+    if (this.onLog) this.onLog(dir, text);
   }
 
   /** Prompt for the calculator's serial port, or reuse one already granted. */
@@ -101,10 +141,11 @@ export class Calculator {
     try { await this.port.close(); } catch { /* as above */ }
   }
 
-  static #withTimeout(promise, what, ms) {
+  static #withTimeout(promise, what, ms, hint = '') {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(
-        () => reject(new Error(`the calculator did not answer ${what}`)), ms);
+        () => reject(new Error(`the calculator did not answer ${what}${hint}`)),
+        ms);
       promise.then(
         (value) => { clearTimeout(timer); resolve(value); },
         (error) => { clearTimeout(timer); reject(error); });
@@ -117,10 +158,10 @@ export class Calculator {
    * A serial read lands wherever it lands -- it has no idea what a message is
    * -- so anything that wants a fixed-size header has to buffer and re-slice.
    */
-  async #receive(length, what, limit = REPLY_TIMEOUT_MS) {
+  async #receive(length, what, limit = REPLY_TIMEOUT_MS, hint = '') {
     while (this.pending.length < length) {
       const { value, done } = await Calculator.#withTimeout(
-        this.reader.read(), what, limit);
+        this.reader.read(), what, limit, hint);
       if (done) throw new Error('the calculator closed the connection');
       if (!value || !value.length) continue;
 
@@ -140,8 +181,37 @@ export class Calculator {
   }
 
   async request(cmd, payload = new Uint8Array(0), arg = 0) {
+    if (this.inFlight !== null) {
+      throw new Error(
+        `two things tried to use the calculator at once: ${commandName(cmd)} `
+        + `started while ${commandName(this.inFlight)} was still waiting for a `
+        + `reply. Nothing was sent.`);
+    }
+
+    this.inFlight = cmd;
+    try {
+      return await this.#exchange(cmd, payload, arg);
+    } finally {
+      this.inFlight = null;
+    }
+  }
+
+  async #exchange(cmd, payload, arg) {
     const seq = (this.seq = (this.seq + 1) & 0xff);
     const what = `command 0x${cmd.toString(16).padStart(2, '0')}`;
+    const archiving = ARCHIVING.has(cmd);
+
+    /*
+     * The error a timeout produces has to be readable by whoever is holding the
+     * calculator. "did not answer command 0x08" is true and tells them nothing;
+     * on a command that archives, the likeliest cause is a defragment prompt
+     * sitting on the calculator's own screen waiting to be answered, and that
+     * is a thing they can go and do something about.
+     */
+    const hint = archiving
+      ? '. It may be asking you to confirm a Garbage Collect on its own screen '
+        + '— answer that, and this will carry on'
+      : '';
 
     const message = new Uint8Array(HEADER_SIZE + payload.length);
     const view = new DataView(message.buffer);
@@ -150,11 +220,23 @@ export class Calculator {
     view.setUint16(2, arg, true);
     view.setUint32(4, payload.length, true);
     message.set(payload, HEADER_SIZE);
+
+    const startedAt = Date.now();
+    this.#log('>', `${commandName(cmd)}`
+      + (arg ? ` arg ${arg}` : '')
+      + (payload.length ? ` · ${payload.length} B` : ''));
     await this.#send(message);
 
-    let limit = REPLY_TIMEOUT_MS;
+    let limit = archiving ? ARCHIVE_TIMEOUT_MS : REPLY_TIMEOUT_MS;
     for (;;) {
-      const reply = await this.#receive(HEADER_SIZE, what, limit);
+      let reply;
+      try {
+        reply = await this.#receive(HEADER_SIZE, what, limit, hint);
+      } catch (error) {
+        this.#log('!', `${commandName(cmd)}: ${error.message}`);
+        throw error;
+      }
+
       const replyView = new DataView(reply.buffer);
       const replyCmd = replyView.getUint8(0);
       const replySeq = replyView.getUint8(1);
@@ -163,21 +245,41 @@ export class Calculator {
 
       if (replyCmd === CMD.BUSY) {
         limit = BUSY_TIMEOUT_MS;
+        this.#log('<', 'BUSY — the calculator is defragmenting its archive; '
+          + 'waiting up to 15 minutes');
         if (this.onBusy) this.onBusy();
         continue;
       }
 
-      const body = length
-        ? await this.#receive(length, what, limit)
-        : new Uint8Array(0);
+      let body;
+      try {
+        body = length
+          ? await this.#receive(length, what, limit, hint)
+          : new Uint8Array(0);
+      } catch (error) {
+        this.#log('!', `${commandName(cmd)} body: ${error.message}`);
+        throw error;
+      }
 
       /*
        * A late answer -- to a request we already gave up on -- is discarded
        * rather than treated as a fault, so a link that does get out of step
        * recovers on its own instead of failing every command after it.
        */
-      if (replySeq !== seq) continue;
-      if (status !== STATUS.OK) throw new ProtocolError(replyCmd, status);
+      if (replySeq !== seq) {
+        this.#log('·', `discarded a late reply to seq ${replySeq}`);
+        continue;
+      }
+
+      const took = Date.now() - startedAt;
+      if (status !== STATUS.OK) {
+        const error = new ProtocolError(replyCmd, status);
+        this.#log('!', `${commandName(cmd)}: ${error.message} (${took} ms)`);
+        throw error;
+      }
+
+      this.#log('<', `${commandName(cmd)} ok · ${took} ms`
+        + (length ? ` · ${length} B` : ''));
       return body;
     }
   }

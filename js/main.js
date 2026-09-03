@@ -11,6 +11,8 @@
 import { Calculator, isSupported } from './link.js';
 import { Session } from './install.js';
 import { notice, clearNotice, ask, el } from './ui.js';
+import { startLog, logEvent } from './log.js';
+import { createLock, BusyError } from './lock.js';
 
 import * as store from './panels/store.js';
 import * as device from './panels/device.js';
@@ -19,6 +21,34 @@ import * as settings from './panels/settings.js';
 
 let calculator = null;
 let session = null;
+
+/*
+ * Everything that touches the calculator goes through this, and only one thing
+ * holds it at a time. See lock.js for why a refusal beats a queue.
+ *
+ * It is deliberately the whole flow that is held, not each command: an install
+ * is a VAR_BEGIN, forty chunks and a VAR_END, and letting a removal slip in
+ * between two of them is the bug this closes, not a lesser version of it.
+ */
+const link = createLock({ onChange: () => refresh() });
+
+/**
+ * Run an operation with the calculator held, and say so if something else has
+ * it rather than letting the click do nothing.
+ *
+ * Panels use this for anything that installs, removes or writes the index.
+ */
+async function exclusive(label, fn) {
+  try {
+    return await link.run(label, fn);
+  } catch (error) {
+    if (error instanceof BusyError) {
+      notice(error.message, 'bad');
+      return undefined;
+    }
+    throw error;
+  }
+}
 
 const PANELS = ['store', 'updates', 'device', 'settings'];
 
@@ -129,99 +159,19 @@ async function askForPassword(hello) {
   }
 }
 
-/*
- * A calculator with no index cannot be installed to, deliberately: the index is
- * the only record of which variable belongs to which package, so files written
- * without one could never be uninstalled. Starting a fresh one is allowed,
- * because at that point there is nothing left to protect.
- */
-async function offerToInitialise() {
-  const answer = await ask({
-    title: 'Set this calculator up?',
-    body: 'This calculator has no BlueObject index yet, so nothing can be '
-      + 'installed to it. Setting it up creates an empty one. Anything already '
-      + 'on the calculator is left alone.',
-    actions: [
-      { id: 'go', label: 'Set it up', kind: 'primary' },
-      { id: null, label: 'Not now' },
-    ],
-  });
-  if (answer !== 'go') return false;
-
-  await session.initialise();
-  return true;
-}
-
-/*
- * A package whose row was written but whose files never all arrived. The row
- * names what it would have owned, so both ways out are possible -- and only the
- * user can say which they want.
- */
-async function offerToRepair() {
-  for (const stuck of session.interrupted()) {
-    /*
-     * All of this is best effort, and none of it may break the connection.
-     *
-     * Not defensiveness for its own sake. An interrupted package is by
-     * definition one the calculator had trouble with, so this is the path most
-     * likely to hit another error -- and letting it throw closed the port on
-     * every connect, which took away the only route to installing the newer
-     * BlueObject that would have fixed the original problem. The calculator
-     * could not be fixed because it was broken.
-     */
-    try {
-      const { missing, unsupported } = await session.verify(stuck.id);
-
-      /*
-       * Two different problems. "Never arrived" is an interrupted transfer and
-       * finishing it is the fix. "Cannot even name it" is a BlueObject too old
-       * for the package, and finishing would fail again the same way -- so it
-       * is not offered.
-       */
-      const body = unsupported.length
-        ? `The BlueObject on this calculator is too old to handle the name `
-          + `${unsupported.join(', ')}, which is why the install stopped. `
-          + `Update BlueObject from the Store, then install this again.`
-        : missing.length
-          ? `${missing.join(', ')} never arrived. You can finish the install, `
-            + `or remove what did arrive.`
-          : `Everything arrived, but the install was interrupted before it `
-            + `could be recorded. You can finish it now.`;
-
-      const answer = await ask({
-        title: `${stuck.name} did not finish installing`,
-        body,
-        actions: unsupported.length
-          ? [
-            { id: null, label: 'Leave it' },
-            { id: 'remove', label: 'Clear it', kind: 'danger' },
-          ]
-          : [
-            { id: 'finish', label: 'Finish installing', kind: 'primary' },
-            { id: 'remove', label: 'Remove it', kind: 'danger' },
-            { id: null, label: 'Leave it' },
-          ],
-      });
-
-      if (answer === 'finish') {
-        await session.apply(stuck.id, { explicit: stuck.explicit });
-      } else if (answer === 'remove') {
-        await session.remove(stuck.id);
-      }
-    } catch (error) {
-      notice(`Could not tidy up ${stuck.name}: ${error.message}. `
-        + `The calculator is still connected.`, 'bad');
-    }
-  }
-}
-
 async function connect() {
   const button = document.getElementById('connect');
+
+  if (link.isBusy()) {
+    notice(`${link.label()} is still going. Wait for it to finish.`, 'bad');
+    return;
+  }
 
   if (calculator) {
     await calculator.close();
     calculator = null;
     session = null;
+    logEvent('\u00b7', 'disconnected');
     setStatus('Not connected');
     button.textContent = 'Connect calculator';
     refresh();
@@ -232,77 +182,96 @@ async function connect() {
   clearNotice();
   setStatus('Connecting…');
 
-  try {
-    calculator = await Calculator.request();
-    await calculator.open();
+  /*
+   * Held for the whole of connecting, not just the port opening.
+   *
+   * refresh() runs part way through so the calculator appears as soon as it is
+   * known, and every panel it draws is disabled until this releases. Without
+   * that, the Store is live and clickable while the index has not been read
+   * yet, and an install started there races the rest of connecting.
+   */
+  await exclusive('Connecting', async () => {
+    try {
+      calculator = await Calculator.request();
 
-    calculator.onBusy = () => notice(
-      'The calculator is tidying its archive. It may be asking you to confirm '
-      + 'that on its own screen. This can take a while.');
+      /*
+       * Recording starts before the port is open, so a session that fails at
+       * HELLO still leaves something to read. The clock runs from here.
+       */
+      startLog();
+      calculator.onLog = logEvent;
 
-    const hello = await calculator.sayHello();
-    session = new Session(calculator, store.getCatalog());
+      await calculator.open();
+      logEvent('\u00b7', 'port open');
 
-    setStatus(`BlueObject ${hello.version || '?'}`, 'connected');
-    button.textContent = 'Disconnect';
+      calculator.onBusy = () => notice(
+        'The calculator is tidying its archive. It may be asking you to confirm '
+        + 'that on its own screen. This can take a while.');
 
-    /*
-     * Before anything else that would be refused. HELLO is deliberately not
-     * gated, so the page can find out a password is wanted rather than sitting
-     * there until every later command times out.
-     */
-    if (hello.password && !await askForPassword(hello)) {
-      notice('Not unlocked, so nothing on this calculator can be changed.');
-      refresh();
-      return;
-    }
+      const hello = await calculator.sayHello();
+      session = new Session(calculator, store.getCatalog());
 
-    if (hello.hasIndex) {
-      await session.load();
-    } else if (!await offerToInitialise()) {
-      /* Connected but unusable for installing. The Device panel still works,
-       * and saying so is better than a Store whose buttons all fail. */
-      notice('This calculator is not set up, so nothing can be installed to it.');
-    }
+      setStatus(`BlueObject ${hello.version || '?'}`, 'connected');
+      button.textContent = 'Disconnect';
 
-    /* The clock is very often unset, and the index records when things were
-     * installed. One command, and only written if it has really moved. */
-    try { await calculator.setClock(); } catch { /* not fatal */ }
-
-    refresh();
-    showPanel('device');
-
-    /*
-     * A protocol mismatch is reported, never fatal. The update that would fix
-     * an out-of-date calculator travels over this same link, so a page that
-     * hung up here would be unable to fix exactly the calculators that need it.
-     */
-    if (hello.protocol !== 1) {
-      notice(`This calculator speaks link protocol ${hello.protocol} and this `
-        + 'page speaks 1. Some things may not work; updating BlueObject should '
-        + 'fix it.');
-    } else if (hello.swept) {
-      notice('An interrupted install was cleaned up on this calculator. '
-        + 'Nothing was left half-written.');
-    }
-
-    if (session.packages.length) {
-      try {
-        await offerToRepair();
-      } catch (error) {
-        notice(`Could not check for interrupted installs: ${error.message}`, 'bad');
+      /*
+       * Before anything else that would be refused. HELLO is deliberately not
+       * gated, so the page can find out a password is wanted rather than
+       * sitting there until every later command times out.
+       */
+      if (hello.password && !await askForPassword(hello)) {
+        notice('Not unlocked, so nothing on this calculator can be changed.');
+        refresh();
+        return;
       }
+
+      if (hello.hasIndex) {
+        await session.load();
+      } else {
+        /*
+         * Connected but unusable for installing. Setting one up writes to the
+         * archive, so it waits to be asked for on the Device panel rather than
+         * opening a dialog over a page the user has only just connected.
+         */
+        notice('This calculator is not set up, so nothing can be installed to '
+          + 'it. The Device tab can set it up.');
+      }
+
+      refresh();
+      showPanel('device');
+
+      /*
+       * A protocol mismatch is reported, never fatal. The update that would fix
+       * an out-of-date calculator travels over this same link, so a page that
+       * hung up here would be unable to fix exactly the calculators that need
+       * it.
+       */
+      if (hello.protocol !== 1) {
+        notice(`This calculator speaks link protocol ${hello.protocol} and `
+          + 'this page speaks 1. Some things may not work; updating BlueObject '
+          + 'should fix it.');
+      } else if (hello.swept) {
+        notice('An interrupted install was cleaned up on this calculator. '
+          + 'Nothing was left half-written.');
+      }
+
+      /*
+       * Read-only: what the calculator is actually holding. Anything that would
+       * *change* it -- finishing an interrupted install, setting the clock,
+       * writing a first index -- is left for the user to ask for on a panel.
+       * Connecting a calculator is not consent to modify it.
+       */
+      await rescan();
+    } catch (error) {
+      if (calculator) { await calculator.close(); calculator = null; }
+      session = null;
+      setStatus('Not connected', 'error');
+      notice(describeConnectError(error), 'bad');
+      refresh();
+    } finally {
+      button.disabled = false;
     }
-    await rescan();
-  } catch (error) {
-    if (calculator) { await calculator.close(); calculator = null; }
-    session = null;
-    setStatus('Not connected', 'error');
-    notice(describeConnectError(error), 'bad');
-    refresh();
-  } finally {
-    button.disabled = false;
-  }
+  });
 }
 
 /* --------------------------------------------------------------------- boot */
@@ -313,6 +282,9 @@ function start() {
     getCatalog: () => store.getCatalog(),
     getCalculator: () => calculator,
     onChanged: rescan,
+    exclusive,
+    isBusy: () => link.isBusy(),
+    busyLabel: () => link.label(),
   };
   device.init(hooks);
   updates.init(hooks);

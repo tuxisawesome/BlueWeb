@@ -3,6 +3,9 @@
 import { run } from './harness.js';
 
 import './version.test.js';
+import './lock.test.js';
+import './log.test.js';
+import './progress.test.js';
 import './tifile.test.js';
 import './blueidx.test.js';
 import './actions.test.js';

@@ -5,11 +5,14 @@
 import { loadCatalog, loadManifest, search } from '../catalog.js';
 import { resolveInstall, DependencyError } from '../deps.js';
 import { compareVersions } from '../version.js';
-import { ask, progress, showMessages, notice, el } from '../ui.js';
+import { ask, progress, showMessages, notice, advancedLog, el } from '../ui.js';
+import { runPlan } from '../progress.js';
 
 let catalog = null;
 let onChanged = null;
 let getSession = null;
+let exclusive = null;  /* run an operation with the calculator held */
+let isBusy = null;
 
 const KB = 1024;
 const kb = (bytes) => `${(bytes / KB).toFixed(bytes < 10 * KB ? 1 : 0)} KB`;
@@ -80,6 +83,10 @@ async function confirmPlan(entry, plan, session) {
 }
 
 async function install(entry) {
+  return exclusive(`Installing ${entry.name}`, () => installNow(entry));
+}
+
+async function installNow(entry) {
   const session = getSession();
   if (!session) {
     notice('Connect a calculator first.', 'bad');
@@ -112,29 +119,47 @@ async function install(entry) {
   if (!await confirmPlan(entry, plan, session)) return;
 
   const bar = progress(`Installing ${entry.name}`);
+  const log = advancedLog();
+  bar.attach(log.node);
   session.messages.length = 0;
 
+  /*
+   * A defragment stops the bytes for as long as it takes, and the calculator
+   * may be waiting to be told to go ahead. Silence here is what made this look
+   * like a dead link.
+   */
+  const calculator = session.calculator;
+  const wasBusy = calculator.onBusy;
+  calculator.onBusy = () => {
+    bar.detail('The calculator is defragmenting its archive.');
+    bar.rate('This can take several minutes, and it may be asking you to '
+      + 'confirm on its own screen.');
+  };
+
   try {
-    for (const item of plan.order) {
-      bar.say(`${item.name} ${item.version}`);
-      bar.fraction(null);
-      await session.apply(item.id, {
-        explicit: item.id === entry.id,
-        onProgress: ({ file, sent, size }) => {
-          bar.say(`${item.name}: ${file}`);
-          bar.fraction(size ? sent / size : null);
-        },
-      });
-    }
+    await runPlan({
+      session,
+      items: plan.order,
+      bar,
+      explicitFor: (item) => item.id === entry.id,
+    });
+    log.stop();
     bar.close();
     await showMessages(session.messages);
     notice(`${entry.name} installed.`);
   } catch (error) {
-    bar.close();
-    notice(`Could not install ${entry.name}: ${error.message}`, 'bad');
+    /*
+     * The dialog stays up, because the log inside it is the only record of what
+     * was happening and closing it throws that away at the worst moment.
+     */
+    bar.fail(`Could not install ${entry.name}: ${error.message}`, () => log.stop());
+    await onChanged?.();
+    return;
+  } finally {
+    calculator.onBusy = wasBusy;
   }
 
-  onChanged?.();
+  await onChanged?.();
 }
 
 /* ---------------------------------------------------------------- the page */
@@ -169,6 +194,12 @@ function appPage(entry) {
     button.textContent = 'Installed';
     button.disabled = true;
   }
+  /* Whatever the button says, it cannot be pressed while the link is held. */
+  if (isBusy()) {
+    button.disabled = true;
+    button.title = 'Something else is using the calculator';
+  }
+
   button.addEventListener('click', () => install(entry));
   actions.append(button);
 
@@ -277,6 +308,8 @@ export function render(query = '') {
 export async function init(hooks) {
   getSession = hooks.getSession;
   onChanged = hooks.onChanged;
+  exclusive = hooks.exclusive;
+  isBusy = hooks.isBusy;
 
   try {
     catalog = await loadCatalog();

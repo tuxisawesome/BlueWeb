@@ -57,6 +57,11 @@ export class Session {
     this.catalog = catalog;
     this.packages = [];
     this.messages = [];
+    /*
+     * Manifests and preflighted files, kept between planSteps() and apply() so
+     * drawing a progress bar does not cost a second download of the package.
+     */
+    this.prepared = new Map();
   }
 
   /** Read the index off the calculator. */
@@ -123,6 +128,62 @@ export class Session {
     return uploads;
   }
 
+  /*
+   * Everything apply() needs, worked out once.
+   *
+   * planSteps() and apply() both want the manifest, the action list and the
+   * preflighted files, and preflight fetches every file in the package -- so
+   * doing it twice would download the whole of KhiCAS to draw a progress bar.
+   * The result is cached against the id and consumed by apply().
+   */
+  async #prepare(id) {
+    const held = this.prepared.get(id);
+    if (held) return held;
+
+    const entry = this.catalog.byId.get(id);
+    if (!entry) throw new InstallError(`"${id}" is not in the store`);
+
+    const manifest = await loadManifest(this.catalog, id);
+    const existing = this.find(id);
+    const actions = existing ? updateActions(manifest) : installActions(manifest);
+    const uploads = await this.#preflight(id, actions);
+
+    const bundle = { entry, manifest, actions, uploads };
+    this.prepared.set(id, bundle);
+    return bundle;
+  }
+
+  /**
+   * What applying this package will do, in order, before any of it happens.
+   *
+   * Each step is `{ label, bytes }`; `bytes` is 0 for the ones that move none.
+   * The index write at either end and the removals are steps too -- they take
+   * real time, most of it a flash write, and a bar that ignores them stands
+   * still through exactly the parts that look most like a hang.
+   *
+   * The indices line up with the `step` that apply()'s `onProgress` reports, so
+   * a caller can lay several packages end to end and get one bar across all of
+   * them.
+   */
+  async planSteps(id) {
+    const { actions, uploads } = await this.#prepare(id);
+
+    const steps = [{ label: 'Recording the install', bytes: 0 }];
+    for (const action of effectsOf(actions)) {
+      if (action.do === 'upload') {
+        const found = uploads.find((u) => u.action === action);
+        steps.push({
+          label: found ? found.variable.name : action.file,
+          bytes: found ? found.variable.body.length : 0,
+        });
+      } else if (action.do === 'remove') {
+        steps.push({ label: `Removing ${action.name}`, bytes: 0 });
+      }
+    }
+    steps.push({ label: 'Finishing', bytes: 0 });
+    return steps;
+  }
+
   /**
    * Install or update one package.
    *
@@ -131,18 +192,29 @@ export class Session {
    * offered for cleanup as an orphan.
    */
   async apply(id, { explicit = true, onProgress = null } = {}) {
-    const entry = this.catalog.byId.get(id);
-    if (!entry) throw new InstallError(`"${id}" is not in the store`);
-
-    const manifest = await loadManifest(this.catalog, id);
+    const { entry, actions, uploads } = await this.#prepare(id);
     const existing = this.find(id);
-    const actions = existing ? updateActions(manifest) : installActions(manifest);
+
+    /*
+     * A bundle describes a decision taken before this ran -- install or update,
+     * and which files that implies. Once it has been acted on, or failed part
+     * way, it is out of date: the package may now be installed when it was not.
+     * So it is consumed here, and a later attempt works it out again.
+     */
+    this.prepared.delete(id);
 
     for (const message of messagesFor(actions, 'pre')) {
       this.#say(message.text, message.level);
     }
 
-    const uploads = await this.#preflight(id, actions);
+    /*
+     * Step 0 is the claim below, and every action gets the next index, so these
+     * line up one for one with what planSteps() described.
+     */
+    const report = (step, file, sent, size) => onProgress?.({
+      package: entry.name, file, sent, size, step,
+    });
+    report(0, null, 0, 0);
 
     /*
      * The claim, written first. Its file list is what the uploads below are
@@ -174,14 +246,14 @@ export class Session {
      * which for BlueObject means the updater before the program it installs.
      * See SYSTEM_SLOTS.
      */
-    let done = 0;
+    let step = 0;
     for (const action of effectsOf(actions)) {
+      step++;
       if (action.do === 'upload') {
         const { variable } = uploads.find((u) => u.action === action);
-        const report = (sent, size) => onProgress?.({
-          package: entry.name, file: variable.name, sent, size,
-          step: done, steps: uploads.length,
-        });
+        const here = step;
+        const onBytes = (sent, size) => report(here, variable.name, sent, size);
+        onBytes(0, variable.body.length);
 
         if (isSystemVariable(variable.name)) {
           const slot = SYSTEM_SLOTS[variable.name];
@@ -197,7 +269,7 @@ export class Session {
             archive: action.archive !== false,
             slot,
             version: entry.version,
-          }, report);
+          }, onBytes);
         } else {
           await this.calculator.putVariable({
             name: variable.name,
@@ -205,15 +277,16 @@ export class Session {
             body: variable.body,
             archive: action.archive !== false,
             owner: id,
-          }, report);
+          }, onBytes);
         }
-        done++;
       } else if (action.do === 'remove') {
+        report(step, action.name, 0, 0);
         await this.calculator.deleteVariable(action.name, TYPE_BY_NAME[action.type]);
         row.files = row.files.filter((f) => f.name !== action.name);
       }
     }
 
+    report(step + 1, null, 0, 0);
     row.installing = false;
     await this.save();
 

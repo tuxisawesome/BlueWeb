@@ -21,6 +21,8 @@ import { parseIndex } from '../blueidx.js';
 let getCalculator = null;
 let getSession = null;
 let onChanged = null;
+let exclusive = null;  /* run an operation with the calculator held */
+let isBusy = null;
 
 const KB = 1024;
 const kb = (bytes) => `${(bytes / KB).toFixed(bytes < 10 * KB ? 1 : 0)} KB`;
@@ -457,6 +459,65 @@ async function restore(calculator) {
   onChanged?.();
 }
 
+/*
+ * The calculator's clock.
+ *
+ * This used to be sent on every connect, quietly. It looks like one harmless
+ * command, but the calculator stores the offset in the index -- so a drift of
+ * more than a minute unarchives the index, rewrites it and archives it again,
+ * which is a flash write that can trigger a garbage collect. That is a lot to
+ * happen to somebody's calculator because they plugged it in.
+ *
+ * So it is a button. The drift is shown, because "your clock is wrong" is only
+ * worth acting on if you can see by how much.
+ */
+function clockSection(calculator) {
+  const wrap = el('div');
+  wrap.append(el('h2', 'category', 'Clock'));
+
+  const stored = calculator.hello?.calcUnixTime ?? 0;
+  const drift = stored ? Math.abs(Math.floor(Date.now() / 1000) - stored) : null;
+
+  wrap.append(el('p', null, !stored
+    ? 'This calculator’s clock has never been set. The index records when '
+      + 'things were installed, so those dates will be wrong until it is.'
+    : drift < 60
+      ? 'This calculator’s clock agrees with this computer.'
+      : `This calculator’s clock is ${describeDrift(drift)} out. The index `
+        + 'records when things were installed, so that is what this affects.'));
+
+  const actions = el('div', 'app-actions');
+  const button = el('button', stored && drift < 60 ? '' : 'primary',
+    'Set the calculator’s clock');
+  button.disabled = isBusy();
+  button.addEventListener('click', () => exclusive('Setting the clock', async () => {
+    try {
+      await calculator.setClock();
+      /* HELLO is where the stored offset came from, and it is now stale. */
+      if (calculator.hello) {
+        calculator.hello.calcUnixTime = Math.floor(Date.now() / 1000);
+      }
+      notice('Clock set.');
+    } catch (error) {
+      notice(`Could not set the clock: ${error.message}`, 'bad');
+    }
+  }));
+  actions.append(button);
+  wrap.append(actions);
+
+  wrap.append(el('p', 'dim',
+    'Setting it rewrites the index, which takes a moment and, on a full '
+    + 'archive, may make the calculator ask to defragment.'));
+
+  return wrap;
+}
+
+function describeDrift(seconds) {
+  if (seconds < 3600) return `${Math.round(seconds / 60)} minutes`;
+  if (seconds < 86400) return `${Math.round(seconds / 3600)} hours`;
+  return `${Math.round(seconds / 86400)} days`;
+}
+
 export function render() {
   const panel = document.getElementById('panel-settings');
   const calculator = getCalculator();
@@ -474,6 +535,9 @@ export function render() {
     wrap.append(el('p', 'bad',
       'This page is not running in a secure context, so it cannot hash a '
       + 'password. Open it over https, or as http://localhost.'));
+    /* Only the password needs crypto. The clock does not, and a calculator
+     * whose dates are wrong should still be fixable here. */
+    wrap.append(clockSection(calculator));
     panel.replaceChildren(wrap);
     return;
   }
@@ -498,15 +562,23 @@ export function render() {
 
   const actions = el('div', 'app-actions');
   const primary = el('button', 'primary', has ? 'Change password' : 'Set a password');
-  primary.addEventListener('click', () => setPassword(calculator, has));
+  primary.disabled = isBusy();
+  primary.addEventListener('click', () =>
+    exclusive('Changing the password', () => setPassword(calculator, has)));
   actions.append(primary);
 
   if (has) {
     const clear = el('button', 'danger', 'Remove password');
-    clear.addEventListener('click', () => clearPassword(calculator));
+    clear.disabled = isBusy();
+    clear.addEventListener('click', () =>
+      exclusive('Removing the password', () => clearPassword(calculator)));
     actions.append(clear);
   }
   wrap.append(actions);
+
+  /* --------------------------------------------------------------- clock */
+
+  wrap.append(clockSection(calculator));
 
   /* -------------------------------------------------------------- backup */
 
@@ -517,11 +589,15 @@ export function render() {
 
   const backup = el('div', 'app-actions');
   const make = el('button', 'primary', 'Back up…');
-  make.addEventListener('click', () => backUp(calculator));
+  make.disabled = isBusy();
+  make.addEventListener('click', () =>
+    exclusive('Backing up', () => backUp(calculator)));
   backup.append(make);
 
   const put = el('button', 'danger', 'Restore…');
-  put.addEventListener('click', () => restore(calculator));
+  put.disabled = isBusy();
+  put.addEventListener('click', () =>
+    exclusive('Restoring', () => restore(calculator)));
   backup.append(put);
   wrap.append(backup);
 
@@ -557,4 +633,6 @@ export function init(hooks) {
   getCalculator = hooks.getCalculator;
   getSession = hooks.getSession;
   onChanged = hooks.onChanged;
+  exclusive = hooks.exclusive;
+  isBusy = hooks.isBusy;
 }

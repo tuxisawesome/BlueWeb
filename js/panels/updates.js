@@ -9,28 +9,49 @@
  */
 
 import { findUpdates, resolveInstall } from '../deps.js';
-import { progress, showMessages, notice, el } from '../ui.js';
+import { progress, showMessages, notice, advancedLog, el } from '../ui.js';
+import { runPlan } from '../progress.js';
 import { loadManifest } from '../catalog.js';
 
 let getSession = null;
 let getCatalog = null;
 let onChanged = null;
+let exclusive = null;  /* run an operation with the calculator held */
+let isBusy = null;
 
 const KB = 1024;
 const kb = (bytes) => `${(bytes / KB).toFixed(bytes < 10 * KB ? 1 : 0)} KB`;
 
 async function runUpdates(items) {
+  return exclusive('Updating', () => runUpdatesNow(items));
+}
+
+async function runUpdatesNow(items) {
   const session = getSession();
   const catalog = getCatalog();
   const bar = progress(`Updating ${items.length} package${items.length === 1 ? '' : 's'}`);
+  const log = advancedLog();
+  bar.attach(log.node);
   session.messages.length = 0;
 
+  const calculator = session.calculator;
+  const wasBusy = calculator.onBusy;
+  calculator.onBusy = () => {
+    bar.detail('The calculator is defragmenting its archive.');
+    bar.rate('This can take several minutes, and it may be asking you to '
+      + 'confirm on its own screen.');
+  };
+
   try {
+    /*
+     * An update may have picked up a new dependency since it was installed, so
+     * each goes through the resolver rather than straight to apply(). Resolve
+     * the lot first: one bar across everything needs to know everything, and
+     * resolving costs manifests rather than transfers.
+     */
+    const order = [];
+    const explicit = new Map();
     for (const item of items) {
-      /*
-       * An update may have picked up a new dependency since it was installed,
-       * so it goes through the resolver rather than straight to apply().
-       */
       const manifests = new Map();
       for (const app of catalog.apps) {
         if (app.id === item.entry.id || (item.entry.deps || []).includes(app.id)) {
@@ -38,30 +59,34 @@ async function runUpdates(items) {
         }
       }
       const plan = resolveInstall(catalog, session.packages, item.entry.id, manifests);
-
       for (const step of plan.order) {
-        bar.say(`${step.name} ${step.version}`);
-        bar.fraction(null);
-        await session.apply(step.id, {
-          explicit: step.id === item.entry.id
-            ? session.find(step.id)?.explicit ?? true
-            : false,
-          onProgress: ({ file, sent, size }) => {
-            bar.say(`${step.name}: ${file}`);
-            bar.fraction(size ? sent / size : null);
-          },
-        });
+        if (order.some((each) => each.id === step.id)) continue;
+        order.push(step);
+        explicit.set(step.id, step.id === item.entry.id
+          ? session.find(step.id)?.explicit ?? true
+          : false);
       }
     }
+
+    await runPlan({
+      session,
+      items: order,
+      bar,
+      explicitFor: (item) => explicit.get(item.id) ?? false,
+    });
+    log.stop();
     bar.close();
     await showMessages(session.messages);
     notice('Up to date.');
   } catch (error) {
-    bar.close();
-    notice(`Could not finish updating: ${error.message}`, 'bad');
+    bar.fail(`Could not finish updating: ${error.message}`, () => log.stop());
+    await onChanged?.();
+    return;
+  } finally {
+    calculator.onBusy = wasBusy;
   }
 
-  onChanged?.();
+  await onChanged?.();
 }
 
 function group(title, items, note, boxes) {
@@ -145,10 +170,12 @@ export function render() {
   const actions = el('div', 'app-actions');
 
   const all = el('button', 'primary', `Install all ${updates.length}`);
+  all.disabled = isBusy();
   all.addEventListener('click', () => runUpdates(updates));
   actions.append(all);
 
   const selected = el('button', null, 'Install selected');
+  selected.disabled = isBusy();
   selected.addEventListener('click', () => {
     const chosen = [...boxes.values()].filter((b) => b.box.checked).map((b) => b.item);
     if (!chosen.length) {
@@ -164,6 +191,8 @@ export function render() {
 }
 
 export function init(hooks) {
+  exclusive = hooks.exclusive;
+  isBusy = hooks.isBusy;
   getSession = hooks.getSession;
   getCatalog = hooks.getCatalog;
   onChanged = hooks.onChanged;

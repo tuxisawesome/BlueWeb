@@ -216,6 +216,13 @@ def main():
             problems.append(f"{package_id}: kind is \"app\" or \"system\"")
         if not manifest.get("name"):
             problems.append(f"{package_id}: no display name")
+        # Anything but a real boolean. "false" is a string and a string is
+        # truthy, so a typo here would hide a package from the Store and say
+        # nothing about it anywhere.
+        if "disabled" in manifest and not isinstance(manifest["disabled"], bool):
+            problems.append(
+                f"{package_id}: \"disabled\" is true or false, not "
+                f"{json.dumps(manifest['disabled'])}")
 
         uploads = []
         check_actions(manifest, directory, problems, uploads, warnings)

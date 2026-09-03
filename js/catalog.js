@@ -117,10 +117,24 @@ export async function loadFile(catalog, id, path) {
   return new Uint8Array(await response.arrayBuffer());
 }
 
+/**
+ * The packages the Store may offer.
+ *
+ * A disabled package is still in the index and still a package: one already on
+ * a calculator keeps its name in the Device panel and its version in Updates,
+ * and anything depending on it still resolves. What it loses is the shop
+ * window. That is the whole difference between disabling a package and taking
+ * it out of apps/ -- the second orphans every calculator that already has it.
+ */
+export function listable(catalog) {
+  return catalog.apps.filter((app) => !app.disabled);
+}
+
 export function search(catalog, query) {
+  const apps = listable(catalog);
   const needle = query.trim().toLowerCase();
-  if (!needle) return catalog.apps;
-  return catalog.apps.filter((app) =>
+  if (!needle) return apps;
+  return apps.filter((app) =>
     app.name.toLowerCase().includes(needle)
     || app.id.includes(needle)
     || (app.summary || '').toLowerCase().includes(needle));

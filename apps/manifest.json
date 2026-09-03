@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "revision": "2026-09-02T23:17:18Z",
+  "revision": "2026-09-03T14:46:28Z",
   "categories": [
     {
       "id": "games",
@@ -110,7 +110,8 @@
       "bytes": 2814827,
       "maxFile": 65232,
       "deps": [],
-      "summary": "A full computer algebra system, as a flash application."
+      "summary": "A full computer algebra system, as a flash application.",
+      "disabled": true
     },
     {
       "id": "mario",

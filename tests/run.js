@@ -8,6 +8,7 @@ import './log.test.js';
 import './progress.test.js';
 import './tifile.test.js';
 import './link.test.js';
+import './catalog.test.js';
 import './blueidx.test.js';
 import './actions.test.js';
 import './deps.test.js';

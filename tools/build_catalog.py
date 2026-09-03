@@ -68,7 +68,7 @@ def main():
                 total += size
                 largest = max(largest, size)
 
-        entries.append({
+        entry = {
             "id": manifest["id"],
             "dir": directory.name,
             "name": manifest.get("name", manifest["id"]),
@@ -82,7 +82,16 @@ def main():
             "deps": [d if isinstance(d, str) else d["id"]
                      for d in manifest.get("dependencies", [])],
             "summary": manifest.get("summary", manifest.get("description", "")),
-        })
+        }
+
+        # Carried only when set, so the index does not gain a "disabled": false
+        # on every package to say nothing. A disabled package stays in the index
+        # rather than being left out of it: the Store will not offer it, but a
+        # calculator that already has it installed still needs its version to
+        # know whether an update exists, and its name to say what is installed.
+        if manifest.get("disabled"):
+            entry["disabled"] = True
+        entries.append(entry)
 
     used = {e["category"] for e in entries}
     catalog = {

@@ -4,6 +4,7 @@
   "name": "KhiCAS",
   "kind": "system",
   "category": "tools",
+  "disabled": true,
   "version": "2024.10.23",
   "summary": "A full computer algebra system, as a flash application.",
   "description": "Advanced Users Only!\n\nKhiCAS is the Giac/Xcas computer algebra system ported to the calculator by its author. It does symbolic algebra — exact arithmetic, factoring, derivatives and integrals, limits, series, equation solving, linear algebra, and 2D and 3D plotting — and it is a second calculator sitting inside your calculator rather than a program you run.\n\nRead this part before installing. KhiCAS is a flash application of nearly 2.7 MB, and the installer takes essentially the whole archive: it ERASES every other flash application and every language pack, and leaves 128 to 256 KB free. It cannot be removed over the cable afterwards, because deleting a flash application needs an undocumented flash write. This is the most destructive thing in the store, and it is worth backing the calculator up with TI Connect CE first.\n\nWhat is installed here is the installer and the 43 pieces it assembles from. Running INST is what writes the application, and the calculator resets when it does. INST checks your OS version and refuses one it does not know, so it fails safely rather than half-writing your flash — but if it refuses, you need the build made for your OS from the author's page.\n\nOn OS 5.5 and later nothing native runs without arTIfiCE, which is in BlueWeb's utils/ folder. Install that first and launch INST from it.",

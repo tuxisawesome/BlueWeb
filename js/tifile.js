@@ -64,6 +64,22 @@ export function isValidName(name) {
   return /^[A-Z][A-Za-z0-9]{0,7}$/.test(name);
 }
 
+/*
+ * Two names TI-OS keeps for itself.
+ *
+ * `#` and `!` live in the same table as everything else, so a listing reports
+ * them like any other variable. They are the operating system's, they belong to
+ * no package, and the calculator will not delete them -- nor could this page
+ * ever write one back, since neither is a name isValidName accepts. Every
+ * action the page could offer for them fails, so they are dropped where the
+ * listing is read and nothing downstream has to know about them.
+ */
+const OS_INTERNAL = new Set(['#', '!']);
+
+export function isOSInternal(name) {
+  return OS_INTERNAL.has(name);
+}
+
 /**
  * Read one variable out of a .8xv or .8xp file.
  *

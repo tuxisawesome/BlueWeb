@@ -16,6 +16,7 @@ import {
   USB_VENDOR_ID, USB_PRODUCT_ID,
 } from './proto.js';
 import { crc32 } from './crc32.js';
+import { isOSInternal } from './tifile.js';
 import { challengeResponse, storedHash, randomSalt } from './sha256.js';
 
 const BAUD_RATE = 115200;
@@ -638,19 +639,33 @@ export class Calculator {
   }
 
   /**
-   * Every program and appvar on the calculator, however it got there.
+   * Every program and appvar on the calculator, however it got there, less the
+   * two TI-OS keeps for itself.
    *
    * The index says what BlueObject installed; this says what is actually
    * present. Pages until it has them all, because the count comes back with the
    * first page and the calculator only sends so many at a time.
+   *
+   * `#` and `!` are dropped here rather than in each panel: they are nobody's
+   * files and nothing can be done to them, so the Device panel would list them
+   * as strays with a delete the calculator refuses, a backup would stop trying
+   * to read one, and a restore would count them among the files it is about to
+   * erase. One filter at the only place they enter the page settles all three.
    */
   async listVariables() {
     const all = [];
+    /*
+     * Counted separately from `all`, because this is the offset the calculator
+     * pages by and it has to keep counting what was filtered out. Asking for
+     * entry 40 after dropping two would re-read two the page has already seen.
+     */
+    let seen = 0;
     for (;;) {
-      const reply = await this.request(CMD.LIST, new Uint8Array(0), all.length);
+      const reply = await this.request(CMD.LIST, new Uint8Array(0), seen);
       const view = new DataView(reply.buffer, reply.byteOffset, reply.byteLength);
       const total = view.getUint16(0, true);
       const returned = reply[2];
+      seen += returned;
 
       for (let i = 0; i < returned; i++) {
         const at = 3 + i * 12;
@@ -659,6 +674,7 @@ export class Calculator {
           if (reply[c] === 0 || reply[c] === 0x20) break;
           name += String.fromCharCode(reply[c]);
         }
+        if (isOSInternal(name)) continue;
         all.push({
           name,
           type: reply[at + 8],
@@ -669,7 +685,7 @@ export class Calculator {
 
       /* No progress means the calculator has nothing more to give; stopping on
        * that as well as on the count keeps a disagreement from spinning here. */
-      if (!returned || all.length >= total) return all;
+      if (!returned || seen >= total) return all;
     }
   }
 

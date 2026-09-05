@@ -6,23 +6,49 @@
   "category": "games",
   "version": "1.0.0",
   "summary": "A platformer, with a large set of levels and an editor.",
-  "description": "A side-scrolling platformer built from scratch on Super Mario Advance 4 mechanics, with powerups, secrets and a large set of bundled levels.\n\n[alpha] runs and [2nd] jumps — holding up lets any key jump. Up uses whatever your current powerup gives you: fireballs as Fire Oiram, a tail spin as Racoon Oiram. [del] quits. At the pack loading screen, [mode] switches to an alternate control scheme.\n\nYou can build your own levels with the Oiram editor, linked below.\n\nOiram is not affiliated with Nintendo. The artwork is Nintendo's.",
+  "description": "A side-scrolling platformer built from scratch on Super Mario Advance 4 mechanics, with powerups, secrets and a large set of bundled levels.\n\n[alpha] runs and [2nd] jumps \u2014 holding up lets any key jump. Up uses whatever your current powerup gives you: fireballs as Fire Oiram, a tail spin as Racoon Oiram. [del] quits. At the pack loading screen, [mode] switches to an alternate control scheme.\n\nYou can build your own levels with the Oiram editor, linked below.\n\nOiram is not affiliated with Nintendo. The artwork is Nintendo's.",
   "author": "Matt \"MateoConLechuga\" Waltz",
   "homepage": "https://github.com/mateoconlechuga/oiram",
-  "dependencies": ["clibs"],
+  "dependencies": [
+    "clibs"
+  ],
   "actions": {
     "install": [
-      { "do": "upload", "file": "OIRAM.8xp", "name": "OIRAM", "type": "prot_prgm", "archive": true },
-      { "do": "upload", "file": "OiramPK.8xv", "name": "OiramPK", "type": "appvar", "archive": true },
-      { "do": "upload", "file": "OiramS.8xv", "name": "OiramS", "type": "appvar", "archive": true },
-      { "do": "upload", "file": "OiramT.8xv", "name": "OiramT", "type": "appvar", "archive": true }
+      {
+        "do": "upload",
+        "file": "OIRAM.8xp",
+        "name": "OIRAM",
+        "type": "prot_prgm",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "OiramPK.8xv",
+        "name": "OiramPK",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "OiramS.8xv",
+        "name": "OiramS",
+        "type": "appvar",
+        "archive": true
+      },
+      {
+        "do": "upload",
+        "file": "OiramT.8xv",
+        "name": "OiramT",
+        "type": "appvar",
+        "archive": true
+      }
     ],
     "uninstall": [
       {
         "do": "message",
         "when": "post",
         "level": "info",
-        "text": "Any levels you made yourself live in their own appvars, which Oiram did not install and this has not touched."
+        "text": "Your saved game is in an appvar called OiramSV, which the game made itself, and any levels you made yourself are in appvars of their own. Oiram installed none of them and this has touched none of them. Delete them by hand from [2nd] [+], 2:Mem Mgmt/Del, B:AppVars if you would rather start over."
       }
     ]
   }

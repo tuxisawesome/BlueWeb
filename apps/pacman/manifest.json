@@ -18,6 +18,14 @@
         "type": "prot_prgm",
         "archive": true
       }
+    ],
+    "uninstall": [
+      {
+        "do": "message",
+        "when": "post",
+        "level": "info",
+        "text": "Your saved game is in an appvar called PacMan, which the game made itself. It is not the program PACMAN this has just removed -- the capitals differ, and appvars are listed apart from programs in any case. It has been left alone, so reinstalling picks up where you stopped. Delete it by hand from [2nd] [+], 2:Mem Mgmt/Del, B:AppVars if you would rather start over."
+      }
     ]
   }
 }

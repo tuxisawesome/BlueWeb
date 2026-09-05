@@ -26,7 +26,7 @@
         "do": "message",
         "when": "post",
         "level": "info",
-        "text": "Your high score is in a file SnakeCE made for itself rather than one this installed, so it has been left where it is."
+        "text": "Your high score is in an appvar called SnakeCE, which the game made itself. That is a different variable from the program SNAKECE this has just removed -- it is listed under AppVars rather than Prgm. It has been left alone, so reinstalling picks up where you stopped. Delete it by hand from [2nd] [+], 2:Mem Mgmt/Del, B:AppVars if you would rather start over."
       }
     ]
   }

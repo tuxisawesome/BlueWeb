@@ -274,6 +274,21 @@ async function connect() {
   });
 }
 
+/*
+ * Pick up a new build channel.
+ *
+ * The catalogue is refetched rather than filtered, because the channel decides
+ * which version of a package the index describes and every panel is drawn from
+ * that. The session holds a reference to the catalogue, so it is pointed at the
+ * new one before anything redraws -- otherwise the Store would offer one build
+ * and an install would send another.
+ */
+async function reloadCatalog() {
+  const loaded = await store.load();
+  if (session && loaded) session.useCatalog(loaded);
+  refresh();
+}
+
 /* --------------------------------------------------------------------- boot */
 
 function start() {
@@ -282,6 +297,7 @@ function start() {
     getCatalog: () => store.getCatalog(),
     getCalculator: () => calculator,
     onChanged: rescan,
+    onChannelChanged: reloadCatalog,
     exclusive,
     isBusy: () => link.isBusy(),
     busyLabel: () => link.label(),

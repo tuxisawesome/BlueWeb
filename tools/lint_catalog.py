@@ -10,6 +10,12 @@ The load-bearing check is that a manifest's declared name and type are compared
 against the real 8x header of the file it points at. The file wins at install
 time, so a disagreement here means the manifest is lying about what the package
 does, and nothing at runtime would ever say so.
+
+Every build of a package is checked, not just the published one. A package with
+channels keeps its old builds so that a channel can point back at one, and a
+historical build nobody has looked at in months is exactly the kind of thing
+that quietly loses a file -- which would be discovered by whoever needed to roll
+back to it, at the worst possible moment.
 """
 
 import json
@@ -80,6 +86,79 @@ def read_variable(data, where, problems):
             "archived": bool(entry[14] & 0x80), "bytes": body_length}
 
 
+def builds_of(manifest, directory):
+    """Every build a package declares, as (version, resolved manifest, files).
+
+    A package with no channels has exactly one build -- itself, in its own
+    directory -- which keeps every check below written once.
+    """
+    channels = manifest.get("channels")
+    if not channels:
+        return [(manifest.get("version"), manifest, directory)]
+
+    out = []
+    for version, build in (manifest.get("builds") or {}).items():
+        named = build.get("dir")
+        files = directory / named if named else directory / "builds" / version
+        out.append((version, {**manifest, **build, "version": version}, files))
+    return out
+
+
+def check_channels(manifest, directory, problems):
+    """Channels point at builds, and builds are what exist on disk."""
+    channels = manifest.get("channels")
+    package_id = manifest.get("id")
+
+    if not channels:
+        if manifest.get("builds"):
+            problems.append(
+                f"{package_id}: has \"builds\" but no \"channels\", so nothing "
+                f"chooses between them")
+        return
+
+    if not isinstance(channels, dict) or not channels:
+        problems.append(f"{package_id}: \"channels\" is a name-to-version object")
+        return
+
+    if "version" in manifest:
+        # Two places saying which version this is, and they would drift the
+        # first time one of them was edited alone.
+        problems.append(
+            f"{package_id}: has channels *and* a top-level \"version\"; the "
+            f"channels decide the version, so remove it")
+
+    if "release" not in channels:
+        problems.append(
+            f"{package_id}: no \"release\" channel; that is what anybody who "
+            f"has not chosen otherwise is served")
+
+    builds = manifest.get("builds") or {}
+    for name, version in channels.items():
+        if version not in builds:
+            problems.append(
+                f"{package_id}: channel \"{name}\" points at {version}, which "
+                f"is not in \"builds\"")
+
+    for version, build in builds.items():
+        if not VERSION.match(str(version)):
+            problems.append(
+                f"{package_id}: build \"{version}\" is not x.y.z -- comparison "
+                f"would have to guess")
+        if "version" in build:
+            problems.append(
+                f"{package_id}: build {version} declares its own \"version\"; "
+                f"the key it is filed under is the version")
+        named = build.get("dir")
+        files = directory / named if named else directory / "builds" / version
+        if not files.is_dir():
+            problems.append(
+                f"{package_id}: build {version} has no {files.relative_to(directory.parent)}/")
+
+    # A build nothing points at is not an error -- keeping history is the point
+    # -- but one that no channel has ever served is worth saying out loud.
+    return
+
+
 def check_actions(manifest, directory, problems, uploads, warnings):
     actions = manifest.get("actions")
     if not isinstance(actions, dict):
@@ -89,16 +168,20 @@ def check_actions(manifest, directory, problems, uploads, warnings):
     if not actions.get("install"):
         problems.append(f"{manifest['id']}: needs an \"actions.install\" list")
 
+    where = manifest["id"]
+    if manifest.get("channels"):
+        where = f"{where} {manifest['version']}"
+
     for phase in ("install", "update", "uninstall"):
         entries = actions.get(phase)
         if entries is None:
             continue
         if not isinstance(entries, list):
-            problems.append(f"{manifest['id']}.{phase}: not a list")
+            problems.append(f"{where}.{phase}: not a list")
             continue
 
         for i, action in enumerate(entries):
-            at = f"{manifest['id']}.{phase}[{i}]"
+            at = f"{where}.{phase}[{i}]"
             verb = action.get("do")
             if verb not in VERBS:
                 problems.append(f"{at}: \"{verb}\" is not one of {sorted(VERBS)}")
@@ -208,7 +291,8 @@ def main():
         if package_id in manifests:
             problems.append(f"{package_id}: two packages claim this id")
 
-        if not VERSION.match(str(manifest.get("version", ""))):
+        if not manifest.get("channels") \
+                and not VERSION.match(str(manifest.get("version", ""))):
             problems.append(
                 f"{package_id}: version \"{manifest.get('version')}\" is not "
                 f"x.y.z -- comparison would have to guess")
@@ -224,24 +308,39 @@ def main():
                 f"{package_id}: \"disabled\" is true or false, not "
                 f"{json.dumps(manifest['disabled'])}")
 
-        uploads = []
-        check_actions(manifest, directory, problems, uploads, warnings)
-        manifests[package_id] = (manifest, directory, uploads)
+        check_channels(manifest, directory, problems)
 
-    # Dependencies, once every package is known.
-    for package_id, (manifest, _, _) in manifests.items():
-        for dep in manifest.get("dependencies", []):
-            dep_id = dep if isinstance(dep, str) else dep.get("id")
-            if dep_id not in manifests:
-                problems.append(f"{package_id}: depends on \"{dep_id}\", "
-                                f"which is not in apps/")
-            elif dep_id == package_id:
-                problems.append(f"{package_id}: depends on itself")
+        builds = builds_of(manifest, directory)
+        for _, resolved, files in builds:
+            uploads = []
+            check_actions(resolved, files, problems, uploads, warnings)
 
-    # Cycles, which would hang a resolver that trusted the catalogue.
-    graph = {pid: [d if isinstance(d, str) else d.get("id")
-                   for d in m.get("dependencies", [])]
-             for pid, (m, _, _) in manifests.items()}
+        manifests[package_id] = (manifest, directory, builds)
+
+    # Dependencies, once every package is known. Per build: what a package needs
+    # is a property of the build, and 2.0.0 of BlueObject needs nothing where
+    # 1.3.0 needs the C libraries.
+    for package_id, (_, _, builds) in manifests.items():
+        for version, resolved, _ in builds:
+            for dep in resolved.get("dependencies", []):
+                dep_id = dep if isinstance(dep, str) else dep.get("id")
+                at = f"{package_id} {version}" if len(builds) > 1 else package_id
+                if dep_id not in manifests:
+                    problems.append(f"{at}: depends on \"{dep_id}\", "
+                                    f"which is not in apps/")
+                elif dep_id == package_id:
+                    problems.append(f"{at}: depends on itself")
+
+    # Cycles, which would hang a resolver that trusted the catalogue. Taken over
+    # every build's dependencies together: a cycle that exists on any channel is
+    # a cycle somebody can hit.
+    graph = {}
+    for pid, (_, _, builds) in manifests.items():
+        edges = set()
+        for _, resolved, _ in builds:
+            for d in resolved.get("dependencies", []):
+                edges.add(d if isinstance(d, str) else d.get("id"))
+        graph[pid] = sorted(edges)
     state = {}
 
     def walk(node, trail):
@@ -265,7 +364,9 @@ def main():
             print(f"  {problem}")
         return 1
 
-    print(f"ok: {len(manifests)} packages in apps/ are well formed")
+    builds = sum(len(b) for _, _, b in manifests.values())
+    extra = f", {builds} builds" if builds != len(manifests) else ""
+    print(f"ok: {len(manifests)} packages in apps/{extra} are well formed")
     for warning in sorted(set(warnings)):
         print(f"  note: {warning}")
     return 0

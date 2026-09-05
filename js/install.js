@@ -64,6 +64,20 @@ export class Session {
     this.prepared = new Map();
   }
 
+  /**
+   * Point this session at a different catalogue.
+   *
+   * Which happens when the build channel changes with a calculator still
+   * connected. Everything prepared so far was preflighted against the old
+   * channel -- the manifest, and the actual file bytes -- so it is thrown away
+   * rather than reused: keeping it would draw a plan for one build and send
+   * another, and nothing downstream would notice.
+   */
+  useCatalog(catalog) {
+    this.catalog = catalog;
+    this.prepared.clear();
+  }
+
   /** Read the index off the calculator. */
   async load() {
     const bytes = await this.calculator.getIndex();

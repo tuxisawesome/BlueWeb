@@ -41,7 +41,8 @@ nothing has to be preprocessed — and the files stay usable with TI Connect CE.
 `id` must match the directory name. `version` must be `x.y.z`, because the
 Updates panel orders versions rather than merely comparing them — otherwise a
 package that had been rolled back would read as having an update, and the panel
-would offer somebody a downgrade.
+would offer somebody a downgrade. (A package that publishes more than one build
+declares `channels` instead of `version`; see below.)
 
 `kind` is `app` or `system`. **A system package is one that needs the user to go
 and run something on the calculator afterwards** — BlueObject needs `prgmBLUEUP`,
@@ -145,6 +146,95 @@ Cesium is vendored in `apps/cesium/`. To move it to a new release, drop the new
 `.8xp` in, update `version` from what the installer prints, and run the two
 tools below.
 
+## Channels: more than one build of a package
+
+Almost every package has one build, and everything above describes it. One does
+not: BlueObject is the program this store installs *through*, so a bad build of
+it is not a bad app — it is a calculator this page can no longer reach, and the
+way back is TI Connect and a cable. A new one wants trying on real hardware
+before everybody gets it.
+
+A package with channels replaces its `version` with a `channels` block and a
+`builds` block, and puts each build's files in its own directory:
+
+```
+apps/blueobject/
+  manifest.json
+  builds/1.3.0/BLUE.8xp, BLUEUP.8xp
+  builds/2.0.0/BLUE.8xp, BLUEUP.8xp
+```
+
+```json
+{
+  "id": "blueobject",
+  "name": "BlueObject",
+  "description": "What is true of every build.",
+
+  "channels": {
+    "release": "1.3.0",
+    "development": "2.0.0"
+  },
+
+  "builds": {
+    "2.0.0": {
+      "dependencies": [],
+      "description": "What is true of this one."
+    },
+    "1.3.0": {
+      "dependencies": ["clibs"]
+    }
+  },
+
+  "dependencies": [],
+  "actions": { "install": [ … ] }
+}
+```
+
+**A channel is a pointer to a build.** `release` is required: it is what anybody
+who has not chosen otherwise is served, and what a browser that cannot remember
+a choice falls back to. Readers pick a channel in Settings → Builds.
+
+**A build inherits the whole manifest and overrides what it names.** So the
+name, the actions and the summary are written once. What a build almost always
+overrides is `dependencies`, because that is the field that describes the build
+rather than the package — BlueObject 2.0.0 needs nothing where 1.3.0 needs the C
+libraries, and taking that from the wrong build installs the C libraries for a
+version that does not use them.
+
+**A build's key is its version.** It does not carry a `version` of its own, and
+neither does the manifest: two places saying which version this is would drift
+the first time one of them was edited alone. Its files come from
+`builds/<version>/` unless it names a `dir`.
+
+### Publishing, and going back
+
+Publishing is moving one line:
+
+```json
+"channels": { "release": "2.0.0", "development": "2.0.0" }
+```
+
+then `python3 tools/build_catalog.py`. Nothing is copied, because the build is
+already there — that is what staging it put in place.
+
+Rolling back is the same line in the other direction. **Old builds are never
+deleted**, which is the whole reason a channel points at a version rather than
+at "the newest": a channel can be moved back to any build still listed, and it
+takes effect on the next page load with nothing rebuilt.
+
+Note what the Updates panel will and will not do with that. It offers only a
+strictly *newer* version, so moving `release` back does not offer anybody a
+downgrade — a calculator already holding the withdrawn build keeps it until a
+higher version is published. That is deliberate: silently downgrading somebody's
+app manager is worse than leaving it alone.
+
+### BlueObject stages itself
+
+`tools/stage_release.sh` in the BlueObject repository builds both programs,
+writes them to `builds/$VERSION/`, registers the build and points
+**development** at it. It never touches `release`. Staging a build is not
+publishing it, and the two being separate acts is what the channel is for.
+
 ## After changing anything
 
 ```sh
@@ -155,6 +245,11 @@ python3 tools/lint_catalog.py     # check every package
 **`apps/manifest.json` is generated. Never edit it.** It exists so the Store and
 Updates panels can render from one fetch instead of one per installed package,
 and it is derived from the per-app manifests so that it cannot drift from them.
+
+The linter checks **every build of every package**, not just the published one.
+A historical build nobody has looked at in months is exactly the sort of thing
+that quietly loses a file, and that would be discovered by whoever needed to
+roll back to it, at the worst possible moment.
 
 The linter is worth reading the output of rather than just the exit code. Its
 most useful check compares each manifest's declared name and type against the

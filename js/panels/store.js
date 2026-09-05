@@ -2,7 +2,8 @@
  * The App Store: the catalogue, one app's page, and the install flow.
  */
 
-import { loadCatalog, loadManifest, search } from '../catalog.js';
+import { loadCatalog, loadManifest, search, reset } from '../catalog.js';
+import { getChannel } from '../channel.js';
 import { resolveInstall, DependencyError } from '../deps.js';
 import { compareVersions } from '../version.js';
 import { ask, progress, showMessages, notice, advancedLog, el } from '../ui.js';
@@ -311,10 +312,25 @@ export async function init(hooks) {
   exclusive = hooks.exclusive;
   isBusy = hooks.isBusy;
 
+  return load();
+}
+
+/*
+ * Fetch the catalogue for whichever channel is selected.
+ *
+ * Called again when the channel changes. What is cached in catalog.js is one
+ * channel's resolved answer rather than the raw index, so the cache is dropped
+ * first -- keeping it would serve the old channel's versions under the new
+ * channel's name, which is the one mistake here that would install the wrong
+ * build without saying anything.
+ */
+export async function load() {
+  reset();
   try {
-    catalog = await loadCatalog();
+    catalog = await loadCatalog(getChannel());
     render();
   } catch (error) {
+    catalog = null;
     document.getElementById('panel-store').replaceChildren(
       el('p', 'bad', `Could not load the catalogue: ${error.message}`));
   }

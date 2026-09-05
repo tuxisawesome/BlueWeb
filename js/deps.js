@@ -18,16 +18,22 @@ export class DependencyError extends Error {}
 /*
  * Packages that must never be removed, even as collateral.
  *
- * BlueObject is a C program and loads five of the shared libraries, so it
- * depends on clibs like anything else -- which means a cascading removal of
- * clibs would sweep it up. The calculator refuses to delete its own program
- * whatever it is asked, so nothing would actually be lost, but the removal
- * would fail half-finished and the user would be left with an unusable
- * calculator and a page reporting an error about a name.
+ * Removing BlueObject leaves nothing on the calculator that can install or
+ * remove anything else, so there is no route back from this page -- only TI
+ * Connect and a cable. The calculator also refuses to delete its own running
+ * program whatever it is asked, so the removal would fail half-finished and
+ * report an error about a name.
  *
- * Better to see it coming. Removing the libraries out from under BlueObject
- * stops BlueObject running, and BlueObject is what installs things, so there is
- * no route back from the page -- only TI Connect and a cable.
+ * This also protects clibs, but only by proxy and only on some channels: a
+ * BlueObject that depends on the C libraries is swept up by a cascading removal
+ * of them, and is refused here. That is true of the released 1.3.0 and not of
+ * the development 2.0.0, which carries the two drivers it cannot do without --
+ * see BlueObject's docs/LIBLINK.md.
+ *
+ * Which is why this names BlueObject and not clibs. The resolver works from the
+ * dependencies of the build actually being served, so the protection follows
+ * whichever build that is instead of being asserted about a package whose
+ * answer changes.
  */
 export const PROTECTED = new Set(['blueobject']);
 

@@ -1,5 +1,5 @@
 /*
- * Settings: the sync password.
+ * Settings: the build channel, the sync password, the clock and backups.
  *
  * Worth being plain about what it does. It does not protect what is stored on
  * the calculator -- anyone holding it can read its variables from the operating
@@ -12,6 +12,7 @@
  */
 
 import { ask, notice, progress, el } from '../ui.js';
+import { CHANNELS, getChannel, setChannel, channelName } from '../channel.js';
 import { isAvailable } from '../sha256.js';
 import { encrypt, decrypt } from '../crypt.js';
 import { buildBackup, parseBackup, backupSize } from '../backup.js';
@@ -21,6 +22,7 @@ import { parseIndex } from '../blueidx.js';
 let getCalculator = null;
 let getSession = null;
 let onChanged = null;
+let onChannelChanged = null;
 let exclusive = null;  /* run an operation with the calculator held */
 let isBusy = null;
 
@@ -518,17 +520,88 @@ function describeDrift(seconds) {
   return `${Math.round(seconds / 86400)} days`;
 }
 
+/* ------------------------------------------------------------- the channel */
+
+/*
+ * Which build of BlueObject this page installs.
+ *
+ * This is a setting of the page rather than of the calculator, so unlike
+ * everything else on this panel it is drawn whether or not one is connected --
+ * and it has to be, because the commonest reason to come here is to switch
+ * channel *before* plugging anything in.
+ */
+function channelSection() {
+  const section = el('div');
+  section.append(el('h2', 'category', 'Builds'));
+  section.append(el('p', null,
+    'BlueObject is the program on the calculator that does the installing, so a '
+    + 'new one is worth trying before everybody gets it. This chooses which '
+    + 'build this page offers.'));
+
+  const chosen = getChannel();
+  const list = el('div', 'field-group');
+
+  for (const channel of CHANNELS) {
+    const row = el('label', 'choice');
+
+    const radio = el('input');
+    radio.type = 'radio';
+    radio.name = 'channel';
+    radio.value = channel.id;
+    radio.checked = channel.id === chosen;
+    radio.disabled = isBusy();
+    radio.addEventListener('change', () => {
+      if (!radio.checked) return;
+      if (!setChannel(channel.id)) {
+        notice('This browser will not let the page remember that, so it will '
+          + 'go back to Release when you reload.', 'warn');
+      }
+      onChannelChanged();
+    });
+
+    const text = el('span');
+    text.append(el('strong', null, channel.name));
+    text.append(el('span', 'dim', ` — ${channel.summary}`));
+
+    row.append(radio, text);
+    list.append(row);
+  }
+  section.append(list);
+
+  if (chosen !== 'release') {
+    /*
+     * Said plainly, because the consequence is not obvious and is not
+     * reversible from this page. A development build that will not start takes
+     * the store down with it -- BlueObject is what installs things, including
+     * the BlueObject that would replace it.
+     */
+    section.append(el('p', 'warn',
+      `You are on ${channelName(chosen)}. If a build here does not start, this `
+      + 'page cannot reach the calculator to fix it — you would send a working '
+      + 'BLUE.8xp back with TI Connect CE and a cable.'));
+  }
+
+  section.append(el('p', 'dim',
+    'Changing this does not touch the calculator. It changes what the Store '
+    + 'installs and what the Updates panel offers from now on; anything already '
+    + 'installed stays where it is until you update it.'));
+
+  return section;
+}
+
 export function render() {
   const panel = document.getElementById('panel-settings');
   const calculator = getCalculator();
 
   if (!calculator) {
     panel.replaceChildren(
+      channelSection(),
       el('p', 'placeholder', 'Connect a calculator to change its settings.'));
     return;
   }
 
   const wrap = el('div');
+  wrap.append(channelSection());
   wrap.append(el('h2', 'category', 'Sync password'));
 
   if (!isAvailable()) {
@@ -633,6 +706,7 @@ export function init(hooks) {
   getCalculator = hooks.getCalculator;
   getSession = hooks.getSession;
   onChanged = hooks.onChanged;
+  onChannelChanged = hooks.onChannelChanged;
   exclusive = hooks.exclusive;
   isBusy = hooks.isBusy;
 }

@@ -193,5 +193,16 @@ ul.installed label { display: flex; gap: 10px; align-items: start; cursor: point
 }
 .field input:focus { outline: none; border-color: var(--accent); }
 
+/* A radio and its label on one line, with the explanation under the name. The
+ * whole row is the click target: a radio button on its own is a small one. */
+.field-group { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
+.choice {
+  display: flex; gap: 10px; align-items: baseline; cursor: pointer;
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px;
+}
+.choice:hover { border-color: var(--accent); }
+.choice input { margin: 0; flex: none; }
+.choice span { line-height: 1.4; }
+
 .explain { margin-top: 32px; border-top: 1px solid var(--line); padding-top: 8px; }
 .explain p { max-width: 62ch; }

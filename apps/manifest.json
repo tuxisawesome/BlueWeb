@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "revision": "2026-09-05T02:48:36Z",
+  "revision": "2026-09-05T03:01:59Z",
   "categories": [
     {
       "id": "games",
@@ -54,32 +54,28 @@
       "name": "BlueObject",
       "kind": "system",
       "category": "system",
-      "version": "1.3.0",
-      "bytes": 26224,
-      "maxFile": 18811,
-      "deps": [
-        "clibs"
-      ],
+      "version": "2.0.4",
+      "bytes": 39140,
+      "maxFile": 30796,
+      "deps": [],
       "summary": "The calculator companion this store installs through.",
       "channels": {
         "release": {
-          "version": "1.3.0",
-          "bytes": 26224,
-          "maxFile": 18811,
-          "deps": [
-            "clibs"
-          ],
-          "files": "blueobject/builds/1.3.0"
+          "version": "2.0.4",
+          "bytes": 39140,
+          "maxFile": 30796,
+          "deps": [],
+          "files": "blueobject/builds/2.0.4"
         },
         "development": {
-          "version": "2.0.3",
-          "bytes": 39141,
-          "maxFile": 30797,
+          "version": "2.0.4",
+          "bytes": 39140,
+          "maxFile": 30796,
           "deps": [],
-          "files": "blueobject/builds/2.0.3"
+          "files": "blueobject/builds/2.0.4"
         }
       },
-      "files": "blueobject/builds/1.3.0"
+      "files": "blueobject/builds/2.0.4"
     },
     {
       "id": "cesium",

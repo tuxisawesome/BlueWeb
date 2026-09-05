@@ -283,11 +283,17 @@ function show(node) {
  * That it is also the thing to tap twenty times is the same trick as tapping a
  * phone's build number, and for the same reason -- it is a line nobody presses
  * by accident.
+ *
+ * Which is why it is a paragraph and not a button. Anything that looks pressable
+ * invites pressing, and a footnote that announces itself as a way in is not
+ * hidden at all -- a phone's build number is ordinary text too. It costs the
+ * keyboard route in, which is the intended trade: this is for whoever already
+ * knows it is here.
  */
 let taps = 0;
 
 function catalogueLine() {
-  const line = el('button', 'link footnote');
+  const line = el('p', 'footnote');
   const unlocked = showHidden();
 
   const describe = () => {

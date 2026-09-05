@@ -204,11 +204,17 @@ ul.installed label { display: flex; gap: 10px; align-items: start; cursor: point
 .choice input { margin: 0; flex: none; }
 .choice span { line-height: 1.4; }
 
-/* The catalogue line at the foot of the Store. Quiet enough to ignore, and a
- * big enough target to tap twenty times without hunting for it. */
+/* The catalogue line at the foot of the Store. Ordinary text -- nothing about
+ * it should suggest pressing it -- but a big enough area to tap twenty times
+ * without hunting for it.
+ *
+ * user-select matters more than it looks: twenty taps on selectable text
+ * selects the line and then the paragraph, and a footnote that highlights blue
+ * under a stream of clicks looks like something going wrong. */
 .footnote {
-  display: block; margin: 28px auto 8px; padding: 8px 12px;
+  margin: 28px auto 8px; padding: 8px 12px;
   color: var(--dim); font-size: 12px; text-align: center;
+  cursor: default; user-select: none; -webkit-user-select: none;
 }
 .tag.hidden { background: var(--raised); color: var(--warn); }
 

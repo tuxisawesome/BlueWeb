@@ -24,16 +24,20 @@ export class DependencyError extends Error {}
  * program whatever it is asked, so the removal would fail half-finished and
  * report an error about a name.
  *
- * This also protects clibs, but only by proxy and only on some channels: a
- * BlueObject that depends on the C libraries is swept up by a cascading removal
- * of them, and is refused here. That is true of the released 1.3.0 and not of
- * the development 2.0.0, which carries the two drivers it cannot do without --
- * see BlueObject's docs/LIBLINK.md.
+ * This used to protect clibs too, by proxy: BlueObject loaded five of the
+ * shared libraries, so a cascading removal of them swept BlueObject up and was
+ * refused here. No published build depends on them any more -- 2.0.0 onwards
+ * carries the two drivers it cannot do without, see BlueObject's
+ * docs/LIBLINK.md -- so clibs is an ordinary package now, kept for the other
+ * apps and removable like any of them.
  *
- * Which is why this names BlueObject and not clibs. The resolver works from the
- * dependencies of the build actually being served, so the protection follows
- * whichever build that is instead of being asserted about a package whose
- * answer changes.
+ * Not quite for everybody, and that is deliberate rather than an oversight. The
+ * resolver works from the dependencies the *index on the calculator* records,
+ * not from the catalogue, so a calculator still holding an older BlueObject
+ * still has clibs protected by proxy -- which is right, because removing them
+ * from that calculator really would stop it running. The protection follows
+ * what is actually installed instead of being asserted about a package whose
+ * answer has changed.
  */
 export const PROTECTED = new Set(['blueobject']);
 

@@ -8,10 +8,15 @@
   "description": "BlueObject runs on the calculator and does the installing. It talks to this page over the USB cable, writes the variables, and keeps the record of what is installed and at what version.\n\nIt updates itself through BLUEUP, a second program small enough to be rebuilt from nothing. A program on this calculator runs inside its own variable and cannot overwrite itself, so the two install each other.",
   "homepage": "https://github.com/tuxisawesome/BlueObject",
   "channels": {
-    "release": "1.3.0",
-    "development": "2.0.3"
+    "release": "2.0.4",
+    "development": "2.0.4"
   },
   "builds": {
+    "2.0.4": {
+      "dependencies": [],
+      "notes": "Needs no C libraries at all: it carries the two USB drivers it cannot do without and loads them itself, so it runs on a calculator with nothing else installed.",
+      "description": "BlueObject runs on the calculator and does the installing. It talks to this page over the USB cable, writes the variables, and keeps the record of what is installed and at what version.\n\nIt needs nothing else on the calculator. It used to load five of the shared libraries and so could not start without them, which was awkward: BlueObject is what installs things, so a calculator without them could not use this page to get them. Three of the five it now does itself, and the two USB drivers it carries inside itself.\n\nIt updates itself through BLUEUP, a second program small enough to be rebuilt from nothing. A program on this calculator runs inside its own variable and cannot overwrite itself, so the two install each other."
+    },
     "2.0.3": {
       "dependencies": [],
       "notes": "Needs no C libraries at all. Installs large files several times faster: committing one used to write it to flash twice and abandon half of what it wrote, which also kept provoking garbage collects.",

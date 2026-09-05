@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "revision": "2026-09-05T03:01:59Z",
+  "revision": "2026-09-05T03:13:02Z",
   "categories": [
     {
       "id": "games",
@@ -86,7 +86,9 @@
       "version": "3.7.0",
       "bytes": 13676,
       "maxFile": 13676,
-      "deps": [],
+      "deps": [
+        "clibs"
+      ],
       "summary": "A GUI shell for running programs on the calculator."
     },
     {
@@ -124,7 +126,9 @@
       "version": "2024.10.23",
       "bytes": 2814827,
       "maxFile": 65232,
-      "deps": [],
+      "deps": [
+        "clibs"
+      ],
       "summary": "A full computer algebra system, as a flash application.",
       "disabled": true
     },

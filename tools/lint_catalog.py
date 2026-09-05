@@ -260,6 +260,79 @@ def check_actions(manifest, directory, problems, uploads, warnings):
                     problems.append(f"{at}: \"level\" is \"info\" or \"action\"")
 
 
+def library_names(manifests):
+    """The C libraries, taken from the package that installs them."""
+    entry = manifests.get("clibs")
+    if not entry:
+        return set()
+    _, _, builds = entry
+    names = set()
+    for _, resolved, _ in builds:
+        for action in resolved.get("actions", {}).get("install", []):
+            if action.get("do") == "upload" and action.get("name"):
+                names.add(action["name"])
+    return names
+
+
+def check_library_use(manifests, problems):
+    """A package that calls into a C library has to say that it needs them.
+
+    This used to be harmless to get wrong. BlueObject itself loaded five of the
+    libraries, so clibs was on every calculator that could install anything at
+    all, and a package that forgot to declare it worked anyway. BlueObject 2.0.0
+    needs none of them, so a calculator can now be perfectly set up and have no
+    libraries on it, and the package that forgot finds out by not starting.
+
+    A program that uses one carries a record naming it -- 0xC0, the name, a NUL
+    -- and that record survives in the file often enough to be worth looking
+    for, including inside the compressed ones. Only the names the clibs package
+    actually installs are looked for, so there is nothing to match by accident;
+    across every package here it finds exactly the ones that do use them and
+    nothing else.
+
+    It can still miss. A name that falls inside a compressed run rather than a
+    literal one will not be there to find, which is why KhiCAS -- whose payload
+    is a flash application image -- went unnoticed until somebody installed it.
+    So this catches a class of mistake rather than all of them, and a package
+    that passes has not been proved innocent.
+
+    The clibs package is skipped: its own libraries reference each other, which
+    is what makes them libraries.
+    """
+    names = library_names(manifests)
+    if not names:
+        return
+
+    patterns = {name: b"\xc0" + name.encode() + b"\x00" for name in names}
+
+    for package_id, (_, _, builds) in sorted(manifests.items()):
+        if package_id == "clibs":
+            continue
+
+        for version, resolved, files in builds:
+            declared = {d if isinstance(d, str) else d.get("id")
+                        for d in resolved.get("dependencies", [])}
+            if "clibs" in declared:
+                continue
+
+            found = set()
+            for action in resolved.get("actions", {}).get("install", []):
+                if action.get("do") != "upload":
+                    continue
+                path = files / action["file"]
+                if not path.is_file():
+                    continue
+                data = path.read_bytes()
+                found |= {n for n, pattern in patterns.items() if pattern in data}
+
+            if found:
+                at = f"{package_id} {version}" if len(builds) > 1 else package_id
+                problems.append(
+                    f"{at}: calls into {', '.join(sorted(found))} but does not "
+                    f"depend on clibs, so it will not start on a calculator "
+                    f"without them")
+
+
 def main():
     root = Path(sys.argv[1]) if len(sys.argv) > 1 \
         else Path(__file__).resolve().parents[1]
@@ -357,6 +430,8 @@ def main():
 
     for package_id in graph:
         walk(package_id, [])
+
+    check_library_use(manifests, problems)
 
     if problems:
         print(f"FAIL ({len(problems)}):")

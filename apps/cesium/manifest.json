@@ -14,7 +14,9 @@
     "file": "cesium_english.zx0.8xp",
     "note": "The English build. The version above is the string the installer prints: \"Cesium Installer Version 3.7.0\"."
   },
-  "dependencies": [],
+  "dependencies": [
+    "clibs"
+  ],
   "actions": {
     "install": [
       {

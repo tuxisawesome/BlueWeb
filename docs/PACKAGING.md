@@ -265,6 +265,22 @@ python3 tools/lint_catalog.py     # check every package
 Updates panels can render from one fetch instead of one per installed package,
 and it is derived from the per-app manifests so that it cannot drift from them.
 
+### Declaring `clibs`
+
+**If a package is written in C or ICE, it needs `clibs`, and it has to say so.**
+That used to be forgiving: BlueObject itself loaded five of the libraries, so
+they were on every calculator that could install anything at all, and a package
+that forgot to declare them worked anyway. BlueObject 2.0.0 needs none of them —
+so a calculator can now be perfectly set up with no libraries on it, and a
+package that forgot finds out by not starting.
+
+The linter looks for the record a program carries naming each library it calls
+into, and refuses a package that references one without depending on `clibs`.
+It catches a class of this rather than all of it: a name that falls inside a
+compressed run rather than a literal one is not there to find, which is how
+KhiCAS went unnoticed until somebody installed it. Passing the check is not
+proof.
+
 The linter checks **every build of every package**, not just the published one.
 A historical build nobody has looked at in months is exactly the sort of thing
 that quietly loses a file, and that would be discovered by whoever needed to

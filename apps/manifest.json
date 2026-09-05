@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "revision": "2026-09-05T01:26:46Z",
+  "revision": "2026-09-05T02:27:20Z",
   "categories": [
     {
       "id": "games",
@@ -72,11 +72,11 @@
           "files": "blueobject/builds/1.3.0"
         },
         "development": {
-          "version": "2.0.1",
-          "bytes": 38533,
-          "maxFile": 30245,
+          "version": "2.0.2",
+          "bytes": 38645,
+          "maxFile": 30357,
           "deps": [],
-          "files": "blueobject/builds/2.0.1"
+          "files": "blueobject/builds/2.0.2"
         }
       },
       "files": "blueobject/builds/1.3.0"

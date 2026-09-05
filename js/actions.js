@@ -6,7 +6,18 @@
  *
  *   upload   put a file from the package directory onto the calculator
  *   remove   delete a variable from the calculator
- *   message  say something to the person doing this
+ *   message  stop and say something to the person doing this
+ *
+ * The list is ordered and a message is an action like the other two: it runs
+ * where it is written, and `stop` says whether the reader may call the whole
+ * thing off there. A message before the first upload is a warning about
+ * what is coming, one in the middle stops between two files, one at the end is
+ * what to go and do now. The person reading it can say stop, and then nothing
+ * after it runs.
+ *
+ * It used to be that messages were pulled out of the list, sorted into "pre"
+ * and "post" and shown together once the work had finished -- which meant a
+ * warning about what an install was going to do arrived after it had done it.
  *
  * A package declares `install` and nothing else unless it needs to. `update`
  * and `uninstall` are derived from it, so an ordinary app names each of its
@@ -55,12 +66,28 @@ function checkRemove(action, where) {
   }
 }
 
-function checkMessage(action, where) {
+function checkMessage(action, where, ordered) {
   if (typeof action.text !== 'string' || !action.text.trim()) {
     throw new ActionError(`${where}: a "message" needs some "text"`);
   }
-  if (action.when !== undefined && !['pre', 'post'].includes(action.when)) {
-    throw new ActionError(`${where}: "when" is "pre" or "post", not "${action.when}"`);
+  if (action.stop !== undefined && typeof action.stop !== 'boolean') {
+    throw new ActionError(`${where}: "stop" is true or false`);
+  }
+  /*
+   * "when" is refused where position already answers it, rather than accepted
+   * and ignored. An author who writes `when: "pre"` at the end of an install
+   * list means it to run first, and silently running it last is the whole bug
+   * this rule exists to make impossible.
+   */
+  if (action.when !== undefined) {
+    if (ordered) {
+      throw new ActionError(
+        `${where}: this list runs in order, so a "message" takes no "when" -- `
+        + `move it to where it should happen`);
+    }
+    if (!['pre', 'post'].includes(action.when)) {
+      throw new ActionError(`${where}: "when" is "pre" or "post", not "${action.when}"`);
+    }
   }
   if (action.level !== undefined && !['info', 'action'].includes(action.level)) {
     throw new ActionError(
@@ -68,8 +95,15 @@ function checkMessage(action, where) {
   }
 }
 
-/** Check one action list, throwing with the offending entry named. */
-export function validateActions(list, where) {
+/**
+ * Check one action list, throwing with the offending entry named.
+ *
+ * `ordered` is true for a list that is run exactly as written -- install and
+ * update. An uninstall list is not: what it removes comes from the index, and
+ * the manifest's own entries are placed around that, so there "when" is the
+ * only way to say which side.
+ */
+export function validateActions(list, where, { ordered = true } = {}) {
   if (!Array.isArray(list)) throw new ActionError(`${where} is not a list`);
 
   list.forEach((action, i) => {
@@ -80,7 +114,25 @@ export function validateActions(list, where) {
     }
     if (action.do === 'upload') checkUpload(action, at);
     if (action.do === 'remove') checkRemove(action, at);
-    if (action.do === 'message') checkMessage(action, at);
+    if (action.do === 'message') checkMessage(action, at, ordered);
+  });
+
+  /*
+   * "stop": true has to have something left to stop, or the button is a lie.
+   * In an ordered list that means work written after it; in an uninstall list,
+   * where the removals come from the index, it means the message is a "pre"
+   * one -- a "post" message runs when there is nothing left by definition.
+   */
+  list.forEach((action, i) => {
+    if (action.do !== 'message' || action.stop !== true) return;
+    const canStop = ordered
+      ? list.slice(i + 1).some((later) => later.do !== 'message')
+      : action.when === 'pre';
+    if (!canStop) {
+      throw new ActionError(
+        `${where}[${i}]: "stop" is true, but nothing runs after this message `
+        + `for stopping to prevent`);
+    }
   });
 
   return list;
@@ -129,7 +181,7 @@ export function updateActions(manifest) {
 export function uninstallActions(manifest, installedPackage) {
   const declared = manifest?.actions?.uninstall
     ? validateActions(manifest.actions.uninstall,
-                      `${manifest.id} actions.uninstall`)
+                      `${manifest.id} actions.uninstall`, { ordered: false })
     : [];
 
   const owned = (installedPackage?.files ?? []).map((file) => ({
@@ -143,21 +195,24 @@ export function uninstallActions(manifest, installedPackage) {
   const already = new Set(owned.map((action) => action.name));
   const extra = declared.filter(
     (action) => action.do === 'remove' && !already.has(action.name));
+
+  /*
+   * The removals are the index's, so a manifest cannot write itself into the
+   * middle of them the way an install list can. "when" is what places a message
+   * either side: a warning about what is about to go, or an account of what has
+   * gone and what is left to do by hand. Most are the second, so that is the
+   * default.
+   */
   const messages = declared.filter((action) => action.do === 'message');
+  const before = messages.filter((action) => action.when === 'pre');
+  const after = messages.filter((action) => (action.when || 'post') === 'post');
 
   if (!owned.length && !extra.length && !installedPackage) {
     throw new ActionError(
       'nothing to uninstall: no record of this package on the calculator');
   }
 
-  return [...messages, ...owned, ...extra];
-}
-
-/** The messages for one phase, in declaration order. */
-export function messagesFor(list, when) {
-  return list
-    .filter((a) => a.do === 'message' && (a.when || 'post') === when)
-    .map((a) => ({ text: a.text, level: a.level || 'info' }));
+  return [...before, ...owned, ...extra, ...after];
 }
 
 /** Just the work, with the talking taken out. */

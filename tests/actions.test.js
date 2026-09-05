@@ -1,7 +1,7 @@
 import { test, deepEqual, throws, equal } from './harness.js';
 import {
   installActions, updateActions, uninstallActions,
-  messagesFor, effectsOf, validateActions,
+  effectsOf, validateActions,
 } from '../js/actions.js';
 
 const snake = {
@@ -81,7 +81,9 @@ test('a manifest that only says something still removes the files', () => {
     { do: 'remove', name: 'SNAKE', type: 'protected program' },
     { do: 'remove', name: 'SNAKEDAT', type: 'appvar' },
   ], 'both files the calculator records are still removed');
-  equal(messagesFor(list, 'post').length, 1, 'and the message is still shown');
+  deepEqual(list[list.length - 1],
+            { do: 'message', when: 'post', text: 'Your save was kept.' },
+            'and the message is still there, after the removals it describes');
 });
 
 test('a manifest can remove extra things, but only extra', () => {
@@ -119,19 +121,87 @@ test('uninstall can be overridden, as Cesium needs', () => {
   /* No index row, so the manifest's own remove is all there is. */
   const list = uninstallActions(cesium, { id: 'cesium', files: [] });
   deepEqual(effectsOf(list), [{ do: 'remove', name: 'CESIUM', type: 'program' }]);
-  deepEqual(messagesFor(list, 'post'),
-    [{ text: 'Delete the app by hand.', level: 'action' }]);
+  equal(list[1].text, 'Delete the app by hand.', 'the message comes after it');
 });
 
-test('messages are separated from work by phase', () => {
-  const list = [
-    { do: 'message', when: 'pre', text: 'This will take a minute.' },
+test('an install list keeps its messages where they were written', () => {
+  /*
+   * The bug: messages used to be lifted out of the list and shown together at
+   * the end, so KhiCAS's warning about erasing every flash application on the
+   * calculator arrived once it had been erased.
+   */
+  const list = validateActions([
+    { do: 'message', text: 'This erases your apps.' },
     { do: 'upload', file: 'A.8xp' },
     { do: 'message', text: 'Run prgmCESIUM.' },
-  ];
-  equal(messagesFor(list, 'pre').length, 1);
-  equal(messagesFor(list, 'post').length, 1, 'when defaults to post');
+  ], 'x');
+  equal(list[0].do, 'message', 'the warning is still first');
+  equal(list[2].text, 'Run prgmCESIUM.');
   equal(effectsOf(list).length, 1);
+});
+
+test('"stop" has to have something left to stop', () => {
+  /* A Stop button on the last message would stop nothing, so it is refused
+   * rather than drawn and ignored. */
+  throws(() => validateActions([
+    { do: 'upload', file: 'A.8xp' },
+    { do: 'message', stop: true, text: 'Too late.' },
+  ], 'x'), 'nothing runs after this message');
+
+  /* Trailing messages do not count as work for this. */
+  throws(() => validateActions([
+    { do: 'upload', file: 'A.8xp' },
+    { do: 'message', stop: true, text: 'Too late.' },
+    { do: 'message', text: 'Also too late.' },
+  ], 'x'), 'nothing runs after this message');
+
+  validateActions([
+    { do: 'message', stop: true, text: 'This erases your apps.' },
+    { do: 'upload', file: 'A.8xp' },
+  ], 'x');
+
+  throws(() => validateActions(
+    [{ do: 'message', stop: 'yes', text: 'x' }], 'x'), '"stop" is true or false');
+});
+
+test('an uninstall message can only stop before the removals', () => {
+  /* The removals come from the index, so position cannot say which side a
+   * message is on -- "when" does, and only "pre" has anything after it. */
+  validateActions([{ do: 'message', when: 'pre', stop: true, text: 'x' }], 'x',
+                  { ordered: false });
+  throws(() => validateActions(
+    [{ do: 'message', when: 'post', stop: true, text: 'x' }], 'x',
+    { ordered: false }), 'nothing runs after this message');
+});
+
+test('an install message cannot ask for a phase it does not have', () => {
+  /*
+   * Accepting "when" here and ignoring it is the trap: KhiCAS declared
+   * when: "pre" at the end of a 46-entry list and got it last, silently.
+   */
+  throws(() => validateActions(
+    [{ do: 'message', when: 'pre', text: 'x' }], 'x'), 'takes no "when"');
+  /* An uninstall list is placed around removals the index chooses, so there it
+   * is the only way to say which side. */
+  validateActions([{ do: 'message', when: 'pre', text: 'x' }], 'x',
+                  { ordered: false });
+});
+
+test('an uninstall message goes on the side its "when" asks for', () => {
+  const list = uninstallActions({
+    id: 'snake',
+    actions: {
+      install: [{ do: 'upload', file: 'SNAKE.8xp' }],
+      uninstall: [
+        { do: 'message', when: 'post', text: 'Gone.' },
+        { do: 'message', when: 'pre', text: 'This cannot be undone.' },
+      ],
+    },
+  }, installed);
+
+  equal(list[0].text, 'This cannot be undone.', 'the warning is before');
+  equal(list[list.length - 1].text, 'Gone.', 'the account of it is after');
+  equal(effectsOf(list).length, 2, 'with the removals in between');
 });
 
 test('a package with no install list is refused', () => {
@@ -148,7 +218,8 @@ test('bad actions are named, not silently skipped', () => {
   throws(() => validateActions([{ do: 'remove', name: 'SNAKE' }], 'x'),
     'needs a "type"');
   throws(() => validateActions([{ do: 'message' }], 'x'), 'needs some "text"');
-  throws(() => validateActions([{ do: 'message', text: 'x', when: 'later' }], 'x'),
+  throws(() => validateActions([{ do: 'message', text: 'x', when: 'later' }], 'x',
+                               { ordered: false }),
     '"pre" or "post"');
 });
 

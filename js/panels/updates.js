@@ -9,8 +9,9 @@
  */
 
 import { findUpdates, resolveInstall } from '../deps.js';
-import { progress, showMessages, notice, advancedLog, el } from '../ui.js';
+import { progress, showMessage, notice, advancedLog, el } from '../ui.js';
 import { runPlan } from '../progress.js';
+import { InstallCancelled } from '../install.js';
 import { loadManifest } from '../catalog.js';
 
 let getSession = null;
@@ -32,7 +33,6 @@ async function runUpdatesNow(items) {
   const bar = progress(`Updating ${items.length} package${items.length === 1 ? '' : 's'}`);
   const log = advancedLog();
   bar.attach(log.node);
-  session.messages.length = 0;
 
   const calculator = session.calculator;
   const wasBusy = calculator.onBusy;
@@ -73,12 +73,21 @@ async function runUpdatesNow(items) {
       items: order,
       bar,
       explicitFor: (item) => explicit.get(item.id) ?? false,
+      onMessage: showMessage,
     });
     log.stop();
     bar.close();
-    await showMessages(session.messages);
     notice('Up to date.');
   } catch (error) {
+    if (error instanceof InstallCancelled) {
+      log.stop();
+      bar.close();
+      notice(session.interrupted().length
+        ? 'Updating was stopped part-way. The Device panel can finish or undo it.'
+        : 'Updating was stopped. Nothing else was changed.', 'action');
+      await onChanged?.();
+      return;
+    }
     bar.fail(`Could not finish updating: ${error.message}`, () => log.stop());
     await onChanged?.();
     return;

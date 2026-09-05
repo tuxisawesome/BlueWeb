@@ -1,5 +1,7 @@
 import { test, equal, deepEqual, assert } from './harness.js';
-import { Session, InstallError, classifyVariables } from '../js/install.js';
+import {
+  Session, InstallError, InstallCancelled, classifyVariables,
+} from '../js/install.js';
 import { parseIndex, buildIndex } from '../js/blueidx.js';
 import { reset as resetCatalog } from '../js/catalog.js';
 
@@ -101,7 +103,7 @@ const snakeManifest = {
     install: [
       { do: 'upload', file: 'SNAKE.8xp', archive: true },
       { do: 'upload', file: 'SNAKEDAT.8xv', archive: true },
-      { do: 'message', when: 'post', text: 'Have fun.' },
+      { do: 'message', text: 'Have fun.' },
     ],
   },
 };
@@ -111,6 +113,166 @@ const files = {
   'apps/snake/SNAKE.8xp': program,
   'apps/snake/SNAKEDAT.8xv': appvar,
 };
+
+/*
+ * The bug these exist for: messages used to be lifted out of the action list,
+ * sorted into "pre" and "post" and shown once the work had finished. KhiCAS
+ * declared a warning about erasing every flash application on the calculator,
+ * and it arrived after the erasing.
+ */
+test('a message runs where it is written, not at the end', async () => {
+  const staged = {
+    ...snakeManifest,
+    actions: {
+      install: [
+        { do: 'upload', file: 'SNAKE.8xp', archive: true },
+        { do: 'message', text: 'Halfway.' },
+        { do: 'upload', file: 'SNAKEDAT.8xv', archive: true },
+      ],
+    },
+  };
+  const restore = stubFetch({ ...files, 'apps/snake/manifest.json': staged });
+  try {
+    const calc = new FakeCalculator();
+    const session = new Session(calc, catalog);
+    await session.load();
+
+    const seen = [];
+    await session.apply('snake', {
+      onMessage: (message) => {
+        seen.push({ ...message, sent: [...calc.variables.keys()] });
+        return true;
+      },
+    });
+
+    equal(seen.length, 1);
+    deepEqual(seen[0].sent, ['SNAKE'],
+              'it ran between the two files, not after both');
+    equal(seen[0].remaining, 1, 'and knows one upload is still to come');
+    equal(seen[0].stop, true, 'so it may be stopped at, not having said otherwise');
+  } finally { restore(); }
+});
+
+test('saying stop at a message stops the actions after it', async () => {
+  const staged = {
+    ...snakeManifest,
+    actions: {
+      install: [
+        { do: 'upload', file: 'SNAKE.8xp', archive: true },
+        { do: 'message', text: 'Halfway.' },
+        { do: 'upload', file: 'SNAKEDAT.8xv', archive: true },
+      ],
+    },
+  };
+  const restore = stubFetch({ ...files, 'apps/snake/manifest.json': staged });
+  try {
+    const calc = new FakeCalculator();
+    const session = new Session(calc, catalog);
+    await session.load();
+
+    let stopped = null;
+    try {
+      await session.apply('snake', { onMessage: () => false });
+    } catch (error) { stopped = error; }
+
+    assert(stopped instanceof InstallCancelled, 'it is a cancellation');
+    deepEqual([...calc.variables.keys()], ['SNAKE'],
+              'the file after the message was never sent');
+    /*
+     * Left exactly as a pulled cable leaves it: a row that says what was being
+     * attempted and what it would have owned, so the Device panel can finish
+     * or undo it.
+     */
+    equal(session.interrupted().length, 1, 'and the row is still mid-install');
+  } finally { restore(); }
+});
+
+test('stopping at a message before anything is sent leaves no trace', async () => {
+  /* KhiCAS's warning is the first entry in its list, so declining it has to
+   * leave the calculator exactly as it was -- not a row claiming files that
+   * were never sent. */
+  const staged = {
+    ...snakeManifest,
+    actions: {
+      install: [
+        { do: 'message', text: 'This erases your apps.' },
+        { do: 'upload', file: 'SNAKE.8xp', archive: true },
+      ],
+    },
+  };
+  const restore = stubFetch({ ...files, 'apps/snake/manifest.json': staged });
+  try {
+    const calc = new FakeCalculator();
+    const session = new Session(calc, catalog);
+    await session.load();
+
+    let stopped = null;
+    try {
+      await session.apply('snake', { onMessage: () => false });
+    } catch (error) { stopped = error; }
+
+    assert(stopped instanceof InstallCancelled);
+    equal(calc.variables.size, 0, 'nothing was sent');
+    equal(session.packages.length, 0, 'and nothing was claimed');
+    deepEqual(calc.log, [], 'the index was never even written');
+  } finally { restore(); }
+});
+
+test('"stop": false takes the choice away', async () => {
+  /* A package that is no use half-installed can insist on being finished: the
+   * message is still shown and still waited on, but there is no way out of it
+   * and a handler saying stop is never asked. */
+  const staged = {
+    ...snakeManifest,
+    actions: {
+      install: [
+        { do: 'upload', file: 'SNAKE.8xp', archive: true },
+        { do: 'message', stop: false, text: 'Nearly there.' },
+        { do: 'upload', file: 'SNAKEDAT.8xv', archive: true },
+      ],
+    },
+  };
+  const restore = stubFetch({ ...files, 'apps/snake/manifest.json': staged });
+  try {
+    const calc = new FakeCalculator();
+    const session = new Session(calc, catalog);
+    await session.load();
+
+    const seen = [];
+    /* Returning false would stop it, if it were being asked at all. */
+    await session.apply('snake', {
+      onMessage: (message) => { seen.push(message); return false; },
+    });
+
+    equal(seen.length, 1);
+    equal(seen[0].stop, false, 'the message says it cannot be stopped at');
+    equal(seen[0].remaining, 1, 'even though work follows it');
+    equal(calc.variables.size, 2, 'so the rest of the install ran');
+  } finally { restore(); }
+});
+
+test('a message that can still be declined is not silently skipped', async () => {
+  /* No handler and work still to come: running past it would be answering it
+   * on the user's behalf. A trailing note, having no decision in it, is not
+   * treated this way -- every other test here installs snake without one. */
+  const staged = {
+    ...snakeManifest,
+    actions: {
+      install: [
+        { do: 'message', text: 'This erases your apps.' },
+        { do: 'upload', file: 'SNAKE.8xp', archive: true },
+      ],
+    },
+  };
+  const restore = stubFetch({ ...files, 'apps/snake/manifest.json': staged });
+  try {
+    const session = new Session(new FakeCalculator(), catalog);
+    await session.load();
+    let message = '';
+    try { await session.apply('snake'); } catch (error) { message = error.message; }
+    assert(message.includes('nothing was given to ask it with'), message);
+  } finally { restore(); }
+});
 
 test('the index claim is written before the files it claims', async () => {
   const restore = stubFetch(files);
@@ -248,10 +410,15 @@ test('a manifest whose uninstall only speaks still deletes the files', async () 
     await session.apply('snake');
     equal(calc.variables.size, 2);
 
-    await session.remove('snake');
+    const said = [];
+    await session.remove('snake', {
+      onMessage: (message) => { said.push(message); return true; },
+    });
     equal(calc.variables.size, 0, 'the files are gone from the calculator');
     equal(session.packages.length, 0, 'and the row is gone from the index');
-    deepEqual(session.messages, [{ text: 'Your save was kept.', level: 'info' }]);
+    deepEqual(said, [{
+      text: 'Your save was kept.', level: 'info', remaining: 0, stop: false,
+    }], 'nothing follows it, so there is nothing to stop');
   } finally { restore(); }
 });
 
@@ -330,7 +497,7 @@ const systemManifest = {
     install: [
       { do: 'upload', file: 'BLUEUP.8xp', archive: true },
       { do: 'upload', file: 'BLUE.8xp', archive: true },
-      { do: 'message', when: 'post', level: 'action', text: 'Run prgmBLUEUP.' },
+      { do: 'message', level: 'action', text: 'Run prgmBLUEUP.' },
     ],
   },
 };
@@ -406,9 +573,13 @@ test('the "run prgmBLUEUP" message is carried back to the user', async () => {
     const calc = new FakeCalculator();
     const session = new Session(calc, systemCatalog);
     await session.load();
-    await session.apply('blueobject');
+    const said = [];
+    await session.apply('blueobject', {
+      onMessage: (message) => { said.push(message); return true; },
+    });
 
-    deepEqual(session.messages, [{ text: 'Run prgmBLUEUP.', level: 'action' }]);
+    deepEqual(said,
+      [{ text: 'Run prgmBLUEUP.', level: 'action', remaining: 0, stop: false }]);
   } finally { restore(); }
 });
 

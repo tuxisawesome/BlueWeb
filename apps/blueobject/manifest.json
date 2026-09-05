@@ -60,7 +60,6 @@
       },
       {
         "do": "message",
-        "when": "post",
         "level": "action",
         "text": "Quit BlueObject and run prgmBLUEUP once to finish the update. Until you do, the calculator keeps running the version it started with."
       }

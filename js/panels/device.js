@@ -7,8 +7,10 @@
  */
 
 import { planRemoval, orphansAfter, dependentsOf } from '../deps.js';
-import { ask, progress, showMessages, notice, advancedLog, el } from '../ui.js';
-import { describeType, classifyVariables, deleteVariables } from '../install.js';
+import { ask, progress, showMessage, notice, advancedLog, el } from '../ui.js';
+import {
+  describeType, classifyVariables, deleteVariables, InstallCancelled,
+} from '../install.js';
 
 let getSession = null;
 let onChanged = null;
@@ -150,25 +152,32 @@ async function removeNow(id) {
   }
 
   const bar = progress('Removing');
-  session.messages.length = 0;
   const removed = [];
 
   try {
     for (const item of order) {
       bar.say(item.name);
       bar.fraction(null);
-      await session.remove(item.id);
+      await session.remove(item.id, { onMessage: showMessage });
       removed.push(item.id);
     }
     bar.close();
   } catch (error) {
     bar.close();
-    notice(`Could not finish removing: ${error.message}`, 'bad');
+    if (error instanceof InstallCancelled) {
+      /*
+       * A warning answered with "stop" -- so whatever had already been removed
+       * is gone and the rest is untouched, which is what the count says.
+       */
+      notice(removed.length
+        ? `Removal stopped after ${removed.length} of ${order.length}.`
+        : 'Nothing was removed.', 'action');
+    } else {
+      notice(`Could not finish removing: ${error.message}`, 'bad');
+    }
     await onChanged?.();
     return;
   }
-
-  await showMessages(session.messages);
 
   const orphans = await offerOrphans(session, removed);
   if (orphans.length) {
@@ -372,13 +381,20 @@ async function finishInstall(id) {
         return;
       }
 
-      await session.apply(id, { explicit: stuck.explicit });
+      await session.apply(id, {
+        explicit: stuck.explicit,
+        onMessage: showMessage,
+      });
       bar.close();
-      await showMessages(session.messages);
       notice(`${stuck.name} finished installing.`);
     } catch (error) {
       bar.close();
-      notice(`Could not finish ${stuck.name}: ${error.message}`, 'bad');
+      if (error instanceof InstallCancelled) {
+        notice(`${stuck.name} was stopped again, and is still part-way.`,
+               'action');
+      } else {
+        notice(`Could not finish ${stuck.name}: ${error.message}`, 'bad');
+      }
     }
     await onChanged?.();
   });

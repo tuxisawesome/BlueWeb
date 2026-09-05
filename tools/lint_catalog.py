@@ -254,10 +254,37 @@ def check_actions(manifest, directory, problems, uploads, warnings):
             elif verb == "message":
                 if not str(action.get("text", "")).strip():
                     problems.append(f"{at}: needs some \"text\"")
-                if action.get("when", "post") not in ("pre", "post"):
-                    problems.append(f"{at}: \"when\" is \"pre\" or \"post\"")
+                # install and update run exactly as written, so position says
+                # when a message happens and "when" would only contradict it.
+                # An uninstall list is placed around removals the index decides,
+                # so there it is the only way to say which side. See actions.js.
+                if "when" in action:
+                    if phase != "uninstall":
+                        problems.append(
+                            f"{at}: this list runs in order, so a \"message\" "
+                            f"takes no \"when\" -- move it to where it belongs")
+                    elif action["when"] not in ("pre", "post"):
+                        problems.append(f"{at}: \"when\" is \"pre\" or \"post\"")
                 if action.get("level", "info") not in ("info", "action"):
                     problems.append(f"{at}: \"level\" is \"info\" or \"action\"")
+                if "stop" in action:
+                    if not isinstance(action["stop"], bool):
+                        problems.append(f"{at}: \"stop\" is true or false")
+                    elif action["stop"]:
+                        # A Stop button has to have something left to stop. In
+                        # an ordered list that is work written after it; in an
+                        # uninstall list the removals come from the index, and
+                        # only a "pre" message runs before them.
+                        if phase == "uninstall":
+                            can_stop = action.get("when") == "pre"
+                        else:
+                            can_stop = any(
+                                later.get("do") != "message"
+                                for later in entries[i + 1:])
+                        if not can_stop:
+                            problems.append(
+                                f"{at}: \"stop\" is true, but nothing runs after "
+                                f"this message for stopping to prevent")
 
 
 def library_names(manifests):

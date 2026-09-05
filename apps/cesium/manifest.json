@@ -32,7 +32,6 @@
       },
       {
         "do": "message",
-        "when": "post",
         "level": "action",
         "text": "Run prgmCESIUM once to finish installing Cesium. Quit BlueObject, press [prgm], choose CESIUM and press [enter]. It will tell you when it is done, and Cesium then appears under [apps]."
       }

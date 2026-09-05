@@ -20,10 +20,21 @@ import { readVariable, TYPE_BY_NAME, TYPE_NAMES } from './tifile.js';
 import { parseIndex, buildIndex, KIND_SYSTEM } from './blueidx.js';
 import { loadManifest, loadFile } from './catalog.js';
 import {
-  installActions, updateActions, uninstallActions, effectsOf, messagesFor,
+  installActions, updateActions, uninstallActions, effectsOf,
 } from './actions.js';
 
 export class InstallError extends Error {}
+
+/*
+ * The user read a message and said stop.
+ *
+ * Not an InstallError: nothing went wrong, and a panel that reports it as a
+ * failure is telling somebody their own decision was a fault. Anything already
+ * written stays written -- the index row is left marked mid-install, which is
+ * the same state a pulled cable leaves and is already understood everywhere
+ * that matters.
+ */
+export class InstallCancelled extends Error {}
 
 /*
  * Variables that cannot be written the ordinary way.
@@ -56,7 +67,6 @@ export class Session {
     this.calculator = calculator;
     this.catalog = catalog;
     this.packages = [];
-    this.messages = [];
     /*
      * Manifests and preflighted files, kept between planSteps() and apply() so
      * drawing a progress bar does not cost a second download of the package.
@@ -100,8 +110,47 @@ export class Session {
     await this.save();
   }
 
-  #say(text, level = 'info') {
-    this.messages.push({ text, level });
+  /*
+   * Run one `message` action, where it stands in the list.
+   *
+   * `remaining` is how many uploads and removals are still to come. Whether the
+   * reader is offered a way out is the message's own `stop`, which defaults to
+   * "yes if there is anything left to stop" -- a warning about what is coming
+   * can be declined unless the manifest says otherwise, and a note at the end
+   * has nothing to decline. A handler returning false is the user saying so.
+   */
+  async #tell(onMessage, action, remaining, id) {
+    const stop = action.stop ?? remaining > 0;
+
+    if (!onMessage) {
+      /*
+       * Without a handler a message has nowhere to go. That is only tolerable
+       * where the message carries no decision: one that can be stopped at is
+       * being asked, and running past it unasked would be taking the answer on
+       * the user's behalf. Anything else is a note, and a dropped note costs
+       * only the note.
+       */
+      if (!stop) return;
+      throw new InstallError(
+        `${id}: an action list stops to ask something here, and nothing was `
+        + `given to ask it with`);
+    }
+
+    const go = await onMessage({
+      text: action.text,
+      level: action.level || 'info',
+      remaining,
+      stop,
+    });
+
+    /*
+     * The answer is only binding where the message said it could be stopped at.
+     * `stop: false` is the package declaring that this one is not a choice, and
+     * that has to hold whatever is showing it -- otherwise the guarantee is
+     * only as good as the handler that happens to be wired up, which is the
+     * kind of promise that survives until the second caller.
+     */
+    if (stop && !go) throw new InstallCancelled(`${id}: stopped at a message`);
   }
 
   /*
@@ -205,7 +254,7 @@ export class Session {
    * pulled it in -- which is what decides, much later, whether it is ever
    * offered for cleanup as an orphan.
    */
-  async apply(id, { explicit = true, onProgress = null } = {}) {
+  async apply(id, { explicit = true, onProgress = null, onMessage = null } = {}) {
     const { entry, actions, uploads } = await this.#prepare(id);
     const existing = this.find(id);
 
@@ -217,10 +266,6 @@ export class Session {
      */
     this.prepared.delete(id);
 
-    for (const message of messagesFor(actions, 'pre')) {
-      this.#say(message.text, message.level);
-    }
-
     /*
      * Step 0 is the claim below, and every action gets the next index, so these
      * line up one for one with what planSteps() described.
@@ -228,12 +273,11 @@ export class Session {
     const report = (step, file, sent, size) => onProgress?.({
       package: entry.name, file, sent, size, step,
     });
-    report(0, null, 0, 0);
 
     /*
-     * The claim, written first. Its file list is what the uploads below are
-     * about to create, so an interrupted install leaves a row that names them
-     * even though they are not all there yet.
+     * The claim, written before the first file. Its file list is what the
+     * uploads below are about to create, so an interrupted install leaves a row
+     * that names them even though they are not all there yet.
      */
     const row = {
       id,
@@ -251,17 +295,38 @@ export class Session {
       })),
     };
 
-    const at = this.packages.findIndex((p) => p.id === id);
-    if (at >= 0) this.packages[at] = row; else this.packages.push(row);
-    await this.save();
+    /*
+     * Claimed on the way past the first real action rather than up front, so a
+     * message written before everything else -- the one that says what this is
+     * about to do to the calculator -- can be answered with "stop" and leave
+     * nothing behind at all.
+     */
+    let claimed = false;
+    const claim = async () => {
+      if (claimed) return;
+      claimed = true;
+      report(0, null, 0, 0);
+      const at = this.packages.findIndex((p) => p.id === id);
+      if (at >= 0) this.packages[at] = row; else this.packages.push(row);
+      await this.save();
+    };
 
     /*
      * Uploads for a system package go in the order the manifest lists them,
      * which for BlueObject means the updater before the program it installs.
      * See SYSTEM_SLOTS.
+     *
+     * Messages are in that same order and are run where they stand, so one
+     * between two files stops there and waits.
      */
+    const effects = effectsOf(actions).length;
     let step = 0;
-    for (const action of effectsOf(actions)) {
+    for (const action of actions) {
+      if (action.do === 'message') {
+        await this.#tell(onMessage, action, effects - step, id);
+        continue;
+      }
+      await claim();
       step++;
       if (action.do === 'upload') {
         const { variable } = uploads.find((u) => u.action === action);
@@ -300,13 +365,12 @@ export class Session {
       }
     }
 
+    /* A package that is nothing but messages still gets its row. */
+    await claim();
+
     report(step + 1, null, 0, 0);
     row.installing = false;
     await this.save();
-
-    for (const message of messagesFor(actions, 'post')) {
-      this.#say(message.text, message.level);
-    }
 
     return row;
   }
@@ -318,7 +382,7 @@ export class Session {
    * manifest overrides it -- so a package installed by an older version whose
    * file list has since changed still goes completely.
    */
-  async remove(id) {
+  async remove(id, { onMessage = null } = {}) {
     const installed = this.find(id);
     if (!installed) throw new InstallError(`"${id}" is not installed`);
 
@@ -334,25 +398,38 @@ export class Session {
 
     const actions = uninstallActions(manifest, installed);
 
-    for (const message of messagesFor(actions, 'pre')) {
-      this.#say(message.text, message.level);
-    }
+    /*
+     * The row goes as soon as the last variable has, and before any message
+     * that follows. Those messages are written in the past tense -- what has
+     * been removed, and what has to be done by hand -- so the index has to
+     * agree with them by the time they are read. It also means stopping at one
+     * stops nothing half-done: there is nothing left to do.
+     */
+    let dropped = false;
+    const drop = async () => {
+      if (dropped) return;
+      dropped = true;
+      this.packages = this.packages.filter((p) => p.id !== id);
+      await this.save();
+    };
 
-    for (const action of effectsOf(actions)) {
-      if (action.do === 'remove') {
-        await this.calculator.deleteVariable(action.name, TYPE_BY_NAME[action.type]);
-      } else if (action.do === 'upload') {
-        throw new InstallError(
-          `${id}: an uninstall cannot upload anything`);
+    const effects = effectsOf(actions).length;
+    let step = 0;
+
+    for (const action of actions) {
+      if (action.do === 'message') {
+        await this.#tell(onMessage, action, effects - step, id);
+        continue;
       }
+      if (action.do === 'upload') {
+        throw new InstallError(`${id}: an uninstall cannot upload anything`);
+      }
+      await this.calculator.deleteVariable(action.name, TYPE_BY_NAME[action.type]);
+      step++;
+      if (step === effects) await drop();
     }
 
-    this.packages = this.packages.filter((p) => p.id !== id);
-    await this.save();
-
-    for (const message of messagesFor(actions, 'post')) {
-      this.#say(message.text, message.level);
-    }
+    await drop();
   }
 
   /**

@@ -9,8 +9,9 @@ import {
 } from '../developer.js';
 import { resolveInstall, DependencyError } from '../deps.js';
 import { compareVersions } from '../version.js';
-import { ask, progress, showMessages, notice, advancedLog, el } from '../ui.js';
+import { ask, progress, showMessage, notice, advancedLog, el } from '../ui.js';
 import { runPlan } from '../progress.js';
+import { InstallCancelled } from '../install.js';
 
 let catalog = null;
 let onChanged = null;
@@ -126,7 +127,6 @@ async function installNow(entry) {
   const bar = progress(`Installing ${entry.name}`);
   const log = advancedLog();
   bar.attach(log.node);
-  session.messages.length = 0;
 
   /*
    * A defragment stops the bytes for as long as it takes, and the calculator
@@ -147,12 +147,27 @@ async function installNow(entry) {
       items: plan.order,
       bar,
       explicitFor: (item) => item.id === entry.id,
+      onMessage: showMessage,
     });
     log.stop();
     bar.close();
-    await showMessages(session.messages);
     notice(`${entry.name} installed.`);
   } catch (error) {
+    /*
+     * Stopping at a message is a decision, not a fault, so it does not get the
+     * failure dialog. What it does get is an honest account of where it
+     * stopped: before anything was sent, or part-way, which the Device panel
+     * can then finish or undo.
+     */
+    if (error instanceof InstallCancelled) {
+      log.stop();
+      bar.close();
+      notice(session.find(entry.id)?.installing
+        ? `${entry.name} was stopped part-way. The Device panel can finish or undo it.`
+        : `${entry.name} was not installed.`, 'action');
+      await onChanged?.();
+      return;
+    }
     /*
      * The dialog stays up, because the log inside it is the only record of what
      * was happening and closing it throws that away at the worst moment.

@@ -30,7 +30,6 @@
       },
       {
         "do": "message",
-        "when": "post",
         "level": "info",
         "text": "Run prgmICE to compile. It lists the ICE source programs on your calculator; pick one with the arrows and press [enter]. On OS 5.2 or earlier you need the Asm( token in front."
       }

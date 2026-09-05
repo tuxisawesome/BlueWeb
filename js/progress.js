@@ -183,8 +183,12 @@ export function createPlanProgress(steps) {
  * stays testable without a DOM or a calculator.
  *
  * `explicitFor(item)` says whether the user asked for that package by name.
+ * `onMessage` is handed each `message` action as the list reaches it; returning
+ * false from it stops the plan where it stands.
  */
-export async function runPlan({ session, items, bar, explicitFor }) {
+export async function runPlan({
+  session, items, bar, explicitFor, onMessage = null,
+}) {
   /*
    * Every step of every package, and where each package starts within them.
    * This costs a preflight of the whole plan up front -- which planSteps caches
@@ -217,6 +221,7 @@ export async function runPlan({ session, items, bar, explicitFor }) {
     await session.apply(item.id, {
       explicit: explicitFor(item),
       onProgress: ({ step, sent }) => show(plan.advance(base + step, sent)),
+      onMessage,
     });
   }
 

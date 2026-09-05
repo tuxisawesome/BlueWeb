@@ -57,11 +57,52 @@ Three verbs, and no more:
 |---|---|
 | `upload` | put a file from this directory onto the calculator |
 | `remove` | delete a variable from the calculator |
-| `message` | say something to the person doing this |
+| `message` | stop and say something to the person doing this |
 
 `upload` takes `file` and `archive`. `remove` takes `name` and `type`
-(`program`, `protected program` or `appvar`). `message` takes `text`, `when`
-(`pre` or `post`, default `post`) and `level` (`info` or `action`).
+(`program`, `protected program` or `appvar`). `message` takes `text`, `level`
+(`info` or `action`) and `stop`.
+
+### A list runs in order, messages included
+
+A `message` is an action like the other two and runs **where it is written**.
+Put it first and it is a warning about what is coming; put it between two
+uploads and the install stops there; put it last and it is what to go and do
+now.
+
+### `stop`: whether it can be called off
+
+`"stop"` says whether the reader may end the whole run at that message. It is
+shown with **Continue** and **Stop**, and stopping runs nothing after it:
+
+```json
+{ "do": "message", "level": "action", "stop": true,
+  "text": "Installing KhiCAS erases every other flash application on the calculator." }
+```
+
+That is the first entry of KhiCAS's install list, so a person who does not want
+that can say so before a byte is sent. Stopping part-way through leaves the
+index row marked mid-install — the same state a pulled cable leaves, which the
+Device panel can finish or undo.
+
+**It defaults to whether there is anything left to stop.** A message with work
+after it can be declined; one at the end cannot, because there is nothing there
+to prevent. Setting `"stop": true` where nothing follows is an error rather than
+a button that does nothing.
+
+Set `"stop": false` to take the choice away — for something that must be read
+but where stopping would be the worse outcome, such as a warning between two
+files of a package that is no use half-installed. Those get a single
+**Continue**, and cannot be dismissed with escape or by clicking away.
+
+A message that cannot be stopped at and has nothing after it is just a parting
+instruction: `"level": "action"` gets a dialog, because it is sending someone
+off to the calculator, and anything else is a passing notice.
+
+There is no `"when"` on an install or update message, and writing one is an
+error. Position already says when it happens, and the two disagreeing is a
+mistake with no symptom: KhiCAS declared `"when": "pre"` at the end of a
+46-entry list, and every install showed that warning once the install was over.
 
 ### The three lists
 
@@ -75,6 +116,11 @@ otherwise, so an ordinary app names each of its files exactly once:
   app installed by an older version whose file list has since changed still
   uninstalls completely, because the calculator is the authority on what is
   actually on it.
+
+`uninstall` is the one list that is not run as written, because most of what it
+does comes from the index rather than from here. A message in it therefore does
+take `"when"` — `pre` to warn before the removals, `post` (the default) to
+account for them afterwards — and that is the only place `"when"` is allowed.
 
 Override `update` when an upgrade should keep something:
 
@@ -114,7 +160,7 @@ to remove the app by hand.
     "install": [
       { "do": "upload", "file": "cesium_english.zx0.8xp",
         "name": "CESIUM", "type": "prot_prgm", "archive": true },
-      { "do": "message", "when": "post", "level": "action",
+      { "do": "message", "level": "action",
         "text": "Run prgmCESIUM once to finish installing Cesium. Quit BlueObject, press [prgm], choose CESIUM and press [enter]." }
     ],
     "uninstall": [

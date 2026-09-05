@@ -21,6 +21,12 @@
   "actions": {
     "install": [
       {
+        "do": "message",
+        "level": "action",
+        "stop": true,
+        "text": "Before you run the installer, know what it does: installing KhiCAS ERASES every other flash application and language pack on the calculator, and fills the archive \u2014 it needs about 2.9 MB free and leaves 128 to 256 KB."
+      },
+      {
         "do": "upload",
         "file": "INST.8xp",
         "name": "INST",
@@ -330,13 +336,6 @@
       },
       {
         "do": "message",
-        "when": "pre",
-        "level": "action",
-        "text": "Before you run the installer, know what it does: installing KhiCAS ERASES every other flash application and language pack on the calculator, and fills the archive \u2014 it needs about 2.9 MB free and leaves 128 to 256 KB. "
-      },
-      {
-        "do": "message",
-        "when": "post",
         "level": "action",
         "text": "Three steps on the calculator, in this order. 1: run INST \u2014 on OS 5.5 or later, start arTIfiCE first ([prgm], choose A, [enter] twice) and launch INST from it; on OS 5.3 or earlier run prgmINST from [prgm]. The calculator resets when it finishes. 2: clear RAM, [2nd] [+], 7:Reset, 1:All RAM \u2014 this one matters, KhiCAS misbehaves without it. 3: delete the 43 AppIns appvars, which have done their job: [2nd] [+], 2:Mem Mgmt/Del, B:AppVars. KhiCAS then appears under [apps]."
       }

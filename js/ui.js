@@ -156,26 +156,59 @@ export function clearNotice() {
 }
 
 /**
- * Show whatever a package's action list had to say.
+ * Show one `message` action, at the point in the list where it stands.
  *
- * An "action" message is one telling the user to go and run something on the
- * calculator, so it gets a dialog rather than a toast that slides away while
- * they are looking at the calculator.
+ * Resolves true to carry on and false to stop, which is what the runner turns
+ * into a cancelled install.
+ *
+ * `stop` is whether this one may be called off -- the manifest's own answer,
+ * defaulted by the runner to "yes if there is anything left to stop". A message
+ * warning that an install is about to erase every flash application on the
+ * calculator has to be declinable, or the person is being told rather than
+ * asked; one that would leave a package half-written is better acknowledged
+ * than abandoned, and a package can say so.
+ *
+ * `remaining` decides only what an unstoppable message looks like: work still
+ * to come makes it something to read before carrying on, and nothing left makes
+ * it a parting instruction. An "action" message gets a dialog either way,
+ * because it sends the user off to the calculator; anything else at the end is
+ * a toast.
  */
-export async function showMessages(messages) {
-  const urgent = messages.filter((m) => m.level === 'action');
-  const rest = messages.filter((m) => m.level !== 'action');
-
-  for (const message of urgent) {
+export async function showMessage({
+  text, level = 'info', remaining = 0, stop = false,
+}) {
+  if (!stop) {
+    if (!remaining && level !== 'action') {
+      notice(text);
+      return true;
+    }
     await ask({
-      title: 'One more step',
-      body: message.text,
-      actions: [{ id: 'ok', label: 'Got it', kind: 'primary' }],
+      title: remaining ? 'Before this goes on' : 'One more step',
+      body: text,
+      actions: [{
+        id: 'ok', label: remaining ? 'Continue' : 'Got it', kind: 'primary',
+      }],
+      /* No way out of this one: not being able to stop is the point of it. */
       dismissable: false,
     });
+    return true;
   }
 
-  if (rest.length) notice(rest.map((m) => m.text).join(' '));
+  /*
+   * Continue goes first because it is focused, and it is the safe answer here:
+   * stopping part-way through leaves the calculator mid-install. Backing out
+   * with escape or the backdrop counts as stopping -- the cautious reading of
+   * someone dismissing a warning they were asked to agree to.
+   */
+  const answer = await ask({
+    title: 'Before this goes on',
+    body: text,
+    actions: [
+      { id: 'go', label: 'Continue', kind: 'primary' },
+      { id: 'stop', label: 'Stop' },
+    ],
+  });
+  return answer === 'go';
 }
 
 /**

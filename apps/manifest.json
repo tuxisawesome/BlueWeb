@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "revision": "2026-09-05T17:12:44Z",
+  "revision": "2026-09-05T18:49:51Z",
   "categories": [
     {
       "id": "games",
@@ -102,6 +102,48 @@
       "summary": "Shared libraries that most C and ICE programs need to run."
     },
     {
+      "id": "flappybird",
+      "dir": "flappybird",
+      "name": "FlappyBird CE",
+      "kind": "app",
+      "category": "games",
+      "version": "2.0.0",
+      "bytes": 2746,
+      "maxFile": 2746,
+      "deps": [
+        "clibs"
+      ],
+      "summary": "Tap to keep the bird up and the pipes coming."
+    },
+    {
+      "id": "graph3ce",
+      "dir": "graph3ce",
+      "name": "Graph3CE",
+      "kind": "app",
+      "category": "tools",
+      "version": "2.0.0",
+      "bytes": 29921,
+      "maxFile": 29921,
+      "deps": [
+        "clibs"
+      ],
+      "summary": "A 3D graphing calculator: plot up to six surfaces and rotate them."
+    },
+    {
+      "id": "hexaedit",
+      "dir": "hexaedit",
+      "name": "HexaEdit CE",
+      "kind": "app",
+      "category": "tools",
+      "version": "3.1.3",
+      "bytes": 14371,
+      "maxFile": 14371,
+      "deps": [
+        "clibs"
+      ],
+      "summary": "A hex editor that runs on the calculator itself."
+    },
+    {
       "id": "icecompiler",
       "dir": "icecompiler",
       "name": "ICE Compiler",
@@ -143,6 +185,32 @@
         "clibs"
       ],
       "summary": "A platformer, with a large set of levels and an editor."
+    },
+    {
+      "id": "pacman",
+      "dir": "pacman",
+      "name": "Pac-Man",
+      "kind": "app",
+      "category": "games",
+      "version": "1.2.0",
+      "bytes": 10377,
+      "maxFile": 10377,
+      "deps": [],
+      "summary": "The arcade original, ghosts and all."
+    },
+    {
+      "id": "snakece",
+      "dir": "snakece",
+      "name": "SnakeCE",
+      "kind": "app",
+      "category": "games",
+      "version": "1.1.0",
+      "bytes": 2714,
+      "maxFile": 2714,
+      "deps": [
+        "clibs"
+      ],
+      "summary": "Snake, with the speed, the board size and the colours up to you."
     },
     {
       "id": "solitare",

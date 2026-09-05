@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "id": "snakece",
+  "name": "SnakeCE",
+  "kind": "app",
+  "category": "games",
+  "version": "1.1.0",
+  "summary": "Snake, with the speed, the board size and the colours up to you.",
+  "description": "Snake for the TI-84 Plus CE. Before a game you set the speed, the size of the pixels \u2014 which is really the size of the board \u2014 and the colours; larger boards suit the higher speeds.\n\nOn the setup screen the keys named either side of each number change it. In a game, [2nd] pauses and [clear] quits. Your best score is kept between games.",
+  "author": "LogicalJoe",
+  "dependencies": [
+    "clibs"
+  ],
+  "actions": {
+    "install": [
+      {
+        "do": "upload",
+        "file": "SNAKECE.8xp",
+        "name": "SNAKECE",
+        "type": "prot_prgm",
+        "archive": true
+      }
+    ],
+    "uninstall": [
+      {
+        "do": "message",
+        "when": "post",
+        "level": "info",
+        "text": "Your high score is in a file SnakeCE made for itself rather than one this installed, so it has been left where it is."
+      }
+    ]
+  }
+}

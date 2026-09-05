@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "id": "flappybird",
+  "name": "FlappyBird CE",
+  "kind": "app",
+  "category": "games",
+  "version": "2.0.0",
+  "summary": "Tap to keep the bird up and the pipes coming.",
+  "description": "Flappy Bird for the CE. Press any key to start and to flap; every key is the same key, which is the whole game.\n\n[clear] leaves.",
+  "author": "Ricovl",
+  "homepage": "https://github.com/Ricovl/FlappyBirdCE",
+  "dependencies": [
+    "clibs"
+  ],
+  "actions": {
+    "install": [
+      {
+        "do": "upload",
+        "file": "FLAPPYB.8xp",
+        "name": "FLAPPYB",
+        "type": "prot_prgm",
+        "archive": true
+      }
+    ]
+  }
+}

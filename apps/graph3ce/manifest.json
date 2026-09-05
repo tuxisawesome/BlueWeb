@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "id": "graph3ce",
+  "name": "Graph3CE",
+  "kind": "app",
+  "category": "tools",
+  "version": "2.0.0",
+  "summary": "A 3D graphing calculator: plot up to six surfaces and rotate them.",
+  "description": "Plots z as a function of x and y, up to six equations at a time, and lets you turn the result around to look at it.\n\n[y=] enters equations, [window] sets the extents and how dense the mesh is, [zoom] zooms, [trace] traces and [graph] draws. [2nd] [mode] leaves, and your settings and equations are still there next time.\n\nA malformed equation is marked with two red exclamation marks when you try to graph it rather than failing quietly. XSteps and YSteps control the contour lines in each direction: the larger they are the more accurate the mesh and the slower it is to rotate.\n\nThe author calls this a gold release \u2014 believed stable, but it may crash the calculator and force a restart.",
+  "author": "Christopher \"Kerm Martian\" Mitchell",
+  "homepage": "https://www.cemetech.net/forum/viewtopic.php?t=19963",
+  "dependencies": [
+    "clibs"
+  ],
+  "actions": {
+    "install": [
+      {
+        "do": "upload",
+        "file": "GRAPH3CE.8xp",
+        "name": "GRAPH3CE",
+        "type": "prot_prgm",
+        "archive": true
+      }
+    ],
+    "uninstall": [
+      {
+        "do": "message",
+        "when": "post",
+        "level": "info",
+        "text": "Graph3CE saves your equations and window settings itself, in a file it made rather than one this installed. That has been left alone, so putting it back finds your work where you left it."
+      }
+    ]
+  }
+}

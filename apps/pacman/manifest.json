@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "pacman",
+  "name": "Pac-Man",
+  "kind": "app",
+  "category": "games",
+  "version": "1.2.0",
+  "summary": "The arcade original, ghosts and all.",
+  "description": "Pac-Man for the CE. Eat the pellets, avoid Blinky, Pinky, Inky and Clyde, and the big flashing pellets turn that round for a while. Fruit shows up now and then.\n\nArrows move, [2nd] or [enter] continues, and [del] pauses and quits. Pressing [5] on the title screen turns on hacked mode, which is a second set of maps.\n\nUnlike most of this store, it needs no C libraries: it is eZ80 assembly and runs on a calculator with nothing else on it.\n\nPac-Man is a trademark of Bandai Namco. This is a fan reimplementation and is not affiliated with them.",
+  "author": "Matt \"MateoConLechuga\" Waltz",
+  "dependencies": [],
+  "actions": {
+    "install": [
+      {
+        "do": "upload",
+        "file": "PacMan.8xp",
+        "name": "PACMAN",
+        "type": "prot_prgm",
+        "archive": true
+      }
+    ]
+  }
+}

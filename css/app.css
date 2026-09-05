@@ -79,21 +79,25 @@ main { padding: 24px 20px 64px; max-width: 900px; }
 .panel h3 { margin: 20px 0 6px; font-size: 14px; font-weight: 600; }
 
 .search {
-  width: 100%; padding: 9px 12px; margin-bottom: 8px;
+  width: 100%; padding: 9px 12px;
   background: var(--panel); color: var(--fg);
   border: 1px solid var(--line); border-radius: 8px; font: inherit;
 }
 .search:focus { outline: none; border-color: var(--accent); }
+
+/* The search box and the Select button, on one line. */
+.store-tools { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.store-tools .search { flex: 1; min-width: 0; }
 
 .grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 
 /*
  * The frame, and the button that fills it.
  *
- * The card used to be the button. It is a plain box now because it also holds
- * the selection checkbox, and a checkbox inside a button cannot be clicked --
- * so the two are siblings, and .card-open is stripped back to nothing so the
- * card still looks like one surface.
+ * The card used to be the button. It is a plain box now because in selection
+ * mode it also holds the tick, which has to sit above the button rather than
+ * inside it -- so the two are siblings, and .card-open is stripped back to
+ * nothing so the card still reads as one surface.
  */
 .card {
   position: relative;
@@ -111,15 +115,34 @@ main { padding: 24px 20px 64px; max-width: 900px; }
 }
 .card-open:hover:not(:disabled) { border-color: transparent; }
 
-/* Out of the flow, so ticking one does not move the text beside it. The name
- * is inset to match, since it is the line that would otherwise run under. */
-.card-pick { position: absolute; top: 14px; right: 14px; margin: 0; cursor: pointer; }
-.card-name { font-weight: 600; padding-right: 24px; }
+/*
+ * The tick. Drawn rather than typed -- a glyph would depend on a font having
+ * it -- and out of the flow, so entering selection mode does not reflow the
+ * text beside it. Only the name is inset, because it is the only line long
+ * enough to run underneath.
+ */
+.card-pick {
+  position: absolute; top: 13px; right: 13px;
+  width: 18px; height: 18px; border-radius: 5px;
+  border: 1px solid var(--dim); background: var(--bg);
+}
+.card.picked .card-pick { background: var(--accent); border-color: var(--accent); }
+.card.picked .card-pick::after {
+  content: ''; position: absolute; left: 5px; top: 1px;
+  width: 4px; height: 9px;
+  border: solid #04122b; border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+/* Installed and current: in the grid, but not on offer. */
+.card.unavailable .card-pick { opacity: 0.35; }
+.card.selectable .card-name { padding-right: 26px; }
+
+.card-name { font-weight: 600; }
 .card-summary { color: var(--dim); font-size: 13px; flex: 1; }
 .card-foot { display: flex; gap: 8px; align-items: center; font-size: 12px; }
 
 /*
- * What is ticked, and the button that installs it.
+ * What is picked, and the button that installs it.
  *
  * Sticky to the bottom of the window rather than parked under the search box:
  * the grid is taller than the viewport on most screens, and a bar you have to

@@ -32,12 +32,30 @@ const batchName = (entries) =>
 /* ----------------------------------------------------------- the selection */
 
 /*
+ * Whether the Store is picking apps rather than browsing them.
+ *
+ * A mode with a button that turns it on, instead of a checkbox sitting on every
+ * card all the time. Two reasons, and the second is the one that decided it.
+ *
+ * A checkbox in the corner of a card announces nothing. Somebody who has not
+ * been told the Store can install several apps at once will not find out from
+ * looking at it, and the whole feature is invisible to exactly the people it
+ * would help. A button labelled "Select" says what is on offer, in the place
+ * they are already looking.
+ *
+ * And once there is a mode, the target can be the whole card instead of an
+ * 18-pixel box in the corner of it. In here a click picks the app up rather
+ * than opening it, which is the same bargain every file manager makes.
+ */
+let selecting = false;
+
+/*
  * Which apps are ticked, by id, in the order they were ticked.
  *
- * Module state rather than something read back off the checkboxes, because
- * render() replaces the whole panel on every keystroke in the search box and on
- * every refresh of the page. A selection kept in the DOM would be thrown away
- * by typing a letter, and thrown away silently, which is the worst way to lose
+ * Module state rather than something read back off the cards, because render()
+ * replaces the whole panel on every keystroke in the search box and on every
+ * refresh of the page. A selection kept in the DOM would be thrown away by
+ * typing a letter, and thrown away silently, which is the worst way to lose
  * one.
  */
 const selected = new Set();
@@ -371,51 +389,59 @@ function appPage(entry) {
 /* ---------------------------------------------------------------- the list */
 
 /*
- * One app in the grid: a button that opens its page, and a box that adds it to
- * a batch.
+ * One app in the grid, in whichever of the two modes the Store is in.
  *
- * The box is a sibling of the button, not a child of it. A checkbox inside a
- * button is neither valid HTML nor operable -- the button swallows the click --
- * which is why `.card` stopped being the button itself and became the frame
- * around the two of them.
+ * Browsing, it is what it always was: one button, and pressing it opens the
+ * app. Selecting, the same button picks the app up instead, and the card grows
+ * a tick box to show it. The box is a decoration -- `aria-hidden`, no click
+ * handler -- because the button it sits on already carries the state as
+ * `aria-pressed`, and two things reporting one fact is how they come to
+ * disagree.
  *
- * `onPick` is called when the box changes, so the bar at the foot of the panel
- * can be redrawn without re-rendering the grid underneath the click.
+ * `onPick` redraws the bar at the foot of the panel, so ticking a card does not
+ * re-render the grid underneath the click.
  */
 function card(entry, onPick) {
   const session = getSession();
   const installed = session?.find(entry.id);
 
   const node = el('div', 'card');
+  const open = el('button', 'card-open');
 
-  const box = el('input', 'card-pick');
-  box.type = 'checkbox';
-  box.checked = selected.has(entry.id);
-  /* The name is in the card, but not in anything the box is labelled by, and a
-   * column of unlabelled checkboxes is unusable read aloud. */
-  box.setAttribute('aria-label', `Select ${entry.name}`);
+  if (selecting) {
+    node.classList.add('selectable');
 
-  /*
-   * Nothing to send, so nothing to batch. Disabled rather than left out, so the
-   * grid keeps its shape as things are installed instead of shuffling the box
-   * somebody was reaching for.
-   */
-  if (upToDate(entry, session)) {
-    box.disabled = true;
-    box.title = `${entry.name} is already installed and up to date`;
+    /*
+     * Nothing left to send, so nothing to pick up. Shown and disabled rather
+     * than left out: the grid keeps its shape as things are installed, instead
+     * of closing the gap under whatever somebody was reaching for.
+     */
+    if (upToDate(entry, session)) {
+      node.classList.add('unavailable');
+      open.disabled = true;
+      open.title = `${entry.name} is already installed and up to date`;
+    } else {
+      const mark = () => {
+        const on = selected.has(entry.id);
+        node.classList.toggle('picked', on);
+        open.setAttribute('aria-pressed', String(on));
+      };
+      mark();
+      open.addEventListener('click', () => {
+        if (selected.has(entry.id)) selected.delete(entry.id);
+        else selected.add(entry.id);
+        mark();
+        onPick();
+      });
+    }
+
+    const tick = el('span', 'card-pick');
+    tick.setAttribute('aria-hidden', 'true');
+    node.append(tick);
+  } else {
+    open.addEventListener('click', () => show(appPage(entry)));
   }
 
-  box.addEventListener('change', () => {
-    if (box.checked) selected.add(entry.id);
-    else selected.delete(entry.id);
-    node.classList.toggle('picked', box.checked);
-    onPick();
-  });
-  node.classList.toggle('picked', box.checked);
-  node.append(box);
-
-  /* Everything below is the card as it was, inside the button that opens it. */
-  const open = el('button', 'card-open');
   open.append(el('span', 'card-name', entry.name));
   open.append(el('span', 'card-summary', entry.summary || ''));
 
@@ -433,45 +459,57 @@ function card(entry, onPick) {
   }
   open.append(foot);
 
-  open.addEventListener('click', () => show(appPage(entry)));
   node.append(open);
   return node;
 }
 
 /*
- * What is ticked, and the one button that acts on it.
+ * What is picked, and the button that installs it.
  *
- * Stuck to the bottom of the window rather than left sitting under the search
- * box. The grid is taller than the viewport on most screens, so a bar that has
- * to be scrolled back to is a bar people stop believing in -- and the count is
- * the only place a tick made twenty rows down is visible at all.
+ * Up the moment Select is pressed, empty count and all, rather than appearing
+ * once something is ticked. It is the answer to "I pressed Select, now what":
+ * the mode says what it wants, and where the way out of it is.
+ *
+ * Stuck to the bottom of the window, because the grid is taller than the
+ * viewport on most screens and a bar you have to scroll back up to find is a
+ * bar people stop believing in. The count is also the only place a card picked
+ * twenty rows down is visible at all.
  */
 function selectionBar(picked, query) {
   const bar = el('div', 'selection-bar');
-  bar.append(el('span', null, `${batchName(picked)} selected`));
+  bar.append(picked.length
+    ? el('span', null, `${batchName(picked)} selected`)
+    : el('span', 'dim', 'Pick the apps you want, then install them together.'));
 
   const actions = el('div', 'selection-actions');
 
-  const clear = el('button', null, 'Clear');
-  clear.addEventListener('click', () => {
-    selected.clear();
-    render(query);
-  });
-  actions.append(clear);
+  const go = el('button', 'primary',
+    picked.length > 1 ? `Install ${picked.length}` : 'Install');
 
-  const go = el('button', 'primary', picked.length === 1
-    ? 'Install' : `Install ${picked.length}`);
-  /* The same two reasons an app page's Install button is dead, said the same
-   * way. Ticking boxes with nothing plugged in is allowed -- it is choosing,
-   * not installing -- and this is where that stops. */
-  if (!getSession()) {
+  /* Nothing picked, then the same two reasons an app page's Install button is
+   * dead, said the same way. Picking apps with nothing plugged in is allowed --
+   * it is choosing, not installing -- and this is where that stops. */
+  if (!picked.length) {
+    go.disabled = true;
+  } else if (!getSession()) {
     go.disabled = true;
     go.title = 'Connect a calculator first';
   } else if (isBusy()) {
     go.disabled = true;
     go.title = 'Something else is using the calculator';
   }
-  go.addEventListener('click', () => install(chosen()));
+
+  go.addEventListener('click', async () => {
+    await install(chosen());
+    /*
+     * Everything that went on is pruned from the selection, so an empty one
+     * means it worked, and a mode with nothing left to do in it should not have
+     * to be dismissed by hand. Anything still picked failed or was stopped, and
+     * staying in here is what makes trying again one press.
+     */
+    if (!chosen().length) selecting = false;
+    render(query);
+  });
   actions.append(go);
 
   bar.append(actions);
@@ -552,24 +590,43 @@ export function render(query = '') {
 
   const wrap = el('div');
 
+  const tools = el('div', 'store-tools');
+
   const box = el('input', 'search');
   box.type = 'search';
   box.placeholder = 'Search apps';
   box.value = query;
   box.addEventListener('input', () => render(box.value));
-  wrap.append(box);
+  tools.append(box);
+
+  /*
+   * The way in and the way out of picking several at once. Cancel rather than
+   * Done, because leaving throws the selection away and a button called Done
+   * would be claiming the opposite.
+   */
+  const toggle = el('button', null, selecting ? 'Cancel' : 'Select');
+  toggle.title = selecting
+    ? 'Stop picking apps'
+    : 'Pick several apps and install them in one go';
+  toggle.addEventListener('click', () => {
+    selecting = !selecting;
+    if (!selecting) selected.clear();
+    render(query);
+  });
+  tools.append(toggle);
+
+  wrap.append(tools);
 
   /*
    * The bar lives in a box of its own and is replaced inside it, rather than
-   * the panel being re-rendered every time a box is ticked. Redrawing the grid
+   * the panel being re-rendered every time a card is picked. Redrawing the grid
    * under a click would take the search box's caret and the scroll position
-   * with it, and ticking three boxes in a row is the ordinary case here.
+   * with it, and picking three in a row is the ordinary case here.
    */
   const selection = el('div');
   const drawSelection = () => {
-    const picked = chosen();
     selection.replaceChildren(
-      ...(picked.length ? [selectionBar(picked, query)] : []));
+      ...(selecting ? [selectionBar(chosen(), query)] : []));
   };
 
   const hidden = developerMode();

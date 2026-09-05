@@ -398,6 +398,12 @@ function appPage(entry) {
  * `aria-pressed`, and two things reporting one fact is how they come to
  * disagree.
  *
+ * The tick goes *inside* the button, which matters more than it looks. It is
+ * absolutely positioned, so it paints above everything in the card and is what
+ * the pointer actually lands on -- and as a sibling of the button that click
+ * would go nowhere, leaving the one part of the card that looks pressable as
+ * the one part that is not. Inside, the click is the button's like any other.
+ *
  * `onPick` redraws the bar at the foot of the panel, so ticking a card does not
  * re-render the grid underneath the click.
  */
@@ -437,7 +443,7 @@ function card(entry, onPick) {
 
     const tick = el('span', 'card-pick');
     tick.setAttribute('aria-hidden', 'true');
-    node.append(tick);
+    open.append(tick);
   } else {
     open.addEventListener('click', () => show(appPage(entry)));
   }

@@ -120,6 +120,11 @@ main { padding: 24px 20px 64px; max-width: 900px; }
  * it -- and out of the flow, so entering selection mode does not reflow the
  * text beside it. Only the name is inset, because it is the only line long
  * enough to run underneath.
+ *
+ * It lives inside .card-open and takes its position from .card, which is the
+ * only positioned ancestor. Being inside the button is what makes it clickable:
+ * absolutely positioned, it paints above the button and is what the pointer
+ * hits, so anywhere else in the tree those clicks would simply be lost.
  */
 .card-pick {
   position: absolute; top: 13px; right: 13px;
@@ -133,8 +138,11 @@ main { padding: 24px 20px 64px; max-width: 900px; }
   border: solid #04122b; border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }
-/* Installed and current: in the grid, but not on offer. */
-.card.unavailable .card-pick { opacity: 0.35; }
+/* Installed and current: in the grid, but not on offer. The tick dims with the
+ * disabled button it sits in, so it needs nothing of its own -- but the card
+ * must stop lighting up under the pointer, or it goes on claiming to be
+ * pressable after it has stopped being so. */
+.card.unavailable:hover, .card.unavailable:focus-within { border-color: var(--line); }
 .card.selectable .card-name { padding-right: 26px; }
 
 .card-name { font-weight: 600; }

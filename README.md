@@ -34,10 +34,17 @@ All five panels work against a real calculator.
 ## Running it
 
 ```sh
-python3 -m http.server 8080
+python3 tools/serve.py
 ```
 
 Then open <http://localhost:8080>.
+
+Use that rather than `python3 -m http.server`, which sends no `Cache-Control`
+at all. A browser given no instructions caches heuristically — roughly a tenth
+of the file's age, so a page last edited three days ago is reused for the next
+nine hours without even revalidating — and you spend the morning debugging an
+edit the browser never fetched. `tools/serve.py` is the same server with
+`no-store` on every response.
 
 **It has to be served, not opened as a file.** `fetch` of a relative path fails
 from `file://`, so a double-clicked `index.html` would show an empty catalogue

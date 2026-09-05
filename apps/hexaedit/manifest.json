@@ -7,6 +7,7 @@
   "version": "3.1.3",
   "summary": "A hex editor that runs on the calculator itself.",
   "description": "An on-calculator hex editor. It opens any TI-OS variable \u2014 programs, appvars, equations \u2014 as well as RAM and the ports, and it will show you the ROM without letting you write to it.\n\nThe main menu lists everything on the calculator in three columns, with size, VAT location and memory location beside each, and the free RAM and archive along the bottom. Beside those is EDB, the edit buffer size: a variable larger than that cannot be opened, and archiving or deleting something else is what makes room.\n\nThe editor does direct letter and digit entry \u2014 pressing A writes its ASCII code \u2014 along with cut, copy and paste, a find for short strings, a goto, an undo, and automatic little-endian decimal translation of up to three bytes. [clear] backs out of anything.",
+  "author": "Captain Calc",
   "homepage": "https://www.cemetech.net/forum/viewtopic.php?t=16759",
   "dependencies": [
     "clibs"

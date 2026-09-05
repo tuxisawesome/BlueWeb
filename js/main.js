@@ -298,6 +298,10 @@ function start() {
     getCalculator: () => calculator,
     onChanged: rescan,
     onChannelChanged: reloadCatalog,
+    /* Redraw every panel without asking the calculator or the network
+     * anything. Switching tabs does not re-render, so a setting changed on one
+     * panel is not visible on another until something says so. */
+    redraw: refresh,
     exclusive,
     isBusy: () => link.isBusy(),
     busyLabel: () => link.label(),

@@ -4,6 +4,9 @@
 
 import { loadCatalog, loadManifest, search, reset } from '../catalog.js';
 import { getChannel } from '../channel.js';
+import {
+  showHidden, setShowHidden, UNLOCK_TAPS, COUNTDOWN_FROM,
+} from '../testing.js';
 import { resolveInstall, DependencyError } from '../deps.js';
 import { compareVersions } from '../version.js';
 import { ask, progress, showMessages, notice, advancedLog, el } from '../ui.js';
@@ -11,6 +14,7 @@ import { runPlan } from '../progress.js';
 
 let catalog = null;
 let onChanged = null;
+let redraw = null;
 let getSession = null;
 let exclusive = null;  /* run an operation with the calculator held */
 let isBusy = null;
@@ -248,6 +252,11 @@ function card(entry) {
 
   const foot = el('span', 'card-foot');
   foot.append(el('span', 'dim', entry.version));
+  if (entry.disabled) {
+    /* Visible on the card, not just in the list it came from. Somebody who
+     * unlocked these a week ago should not have to remember which is which. */
+    foot.append(el('span', 'tag hidden', 'Hidden'));
+  }
   if (installed) {
     foot.append(el('span',
       compareVersions(entry.version, installed.version) > 0 ? 'tag update' : 'tag',
@@ -262,6 +271,60 @@ function card(entry) {
 function show(node) {
   const panel = document.getElementById('panel-store');
   panel.replaceChildren(node);
+}
+
+/*
+ * The catalogue line at the foot of the Store, and the way in to the hidden
+ * packages.
+ *
+ * It earns its place on its own: when the Store is showing something
+ * unexpected, the first question is which catalogue it came from and which
+ * build channel is selected, and until now neither was written down anywhere.
+ * That it is also the thing to tap twenty times is the same trick as tapping a
+ * phone's build number, and for the same reason -- it is a line nobody presses
+ * by accident.
+ */
+let taps = 0;
+
+function catalogueLine() {
+  const line = el('button', 'link footnote');
+  const unlocked = showHidden();
+
+  const describe = () => {
+    const revision = (catalog?.revision || '').replace('T', ' ').replace('Z', '');
+    line.textContent = `Catalogue ${revision} · ${getChannel()} channel`
+      + (unlocked ? ' · showing hidden packages' : '');
+  };
+  describe();
+
+  line.addEventListener('click', () => {
+    if (showHidden()) return;   /* Already on; Settings is where it goes off. */
+
+    taps++;
+    const left = UNLOCK_TAPS - taps;
+
+    if (left <= 0) {
+      taps = 0;
+      if (setShowHidden(true)) {
+        notice('Hidden packages are now in the Store. Settings has the switch '
+          + 'to put them away again.');
+      } else {
+        notice('This browser will not let the page remember that, so hidden '
+          + 'packages will be put away again when you reload.', 'warn');
+      }
+      /* Settings grows a section the moment this goes on, and switching tabs
+       * does not redraw on its own. */
+      redraw();
+      return;
+    }
+
+    if (left <= COUNTDOWN_FROM) {
+      line.textContent = left === 1
+        ? '1 more' : `${left} more`;
+    }
+  });
+
+  return line;
 }
 
 export function render(query = '') {
@@ -280,9 +343,11 @@ export function render(query = '') {
   box.addEventListener('input', () => render(box.value));
   wrap.append(box);
 
-  const matches = search(catalog, query);
+  const hidden = showHidden();
+  const matches = search(catalog, query, { hidden });
   if (!matches.length) {
     wrap.append(el('p', 'placeholder', `Nothing matches "${query}".`));
+    wrap.append(catalogueLine());
     show(wrap);
     return;
   }
@@ -297,6 +362,7 @@ export function render(query = '') {
     wrap.append(grid);
   }
 
+  wrap.append(catalogueLine());
   show(wrap);
   /* Put the caret back where it was; replaceChildren threw the old box away. */
   if (query) {
@@ -309,6 +375,7 @@ export function render(query = '') {
 export async function init(hooks) {
   getSession = hooks.getSession;
   onChanged = hooks.onChanged;
+  redraw = hooks.redraw;
   exclusive = hooks.exclusive;
   isBusy = hooks.isBusy;
 

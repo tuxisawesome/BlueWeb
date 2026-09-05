@@ -13,6 +13,7 @@
 
 import { ask, notice, progress, el } from '../ui.js';
 import { CHANNELS, getChannel, setChannel, channelName } from '../channel.js';
+import { showHidden, setShowHidden } from '../testing.js';
 import { isAvailable } from '../sha256.js';
 import { encrypt, decrypt } from '../crypt.js';
 import { buildBackup, parseBackup, backupSize } from '../backup.js';
@@ -23,6 +24,7 @@ let getCalculator = null;
 let getSession = null;
 let onChanged = null;
 let onChannelChanged = null;
+let redraw = null;
 let exclusive = null;  /* run an operation with the calculator held */
 let isBusy = null;
 
@@ -589,19 +591,58 @@ function channelSection() {
   return section;
 }
 
+/*
+ * Only once the Store's twenty taps have found it.
+ *
+ * The point of putting it here is that it stops being hidden the moment it is
+ * on. Somebody who unlocked this a month ago and has forgotten needs a place to
+ * see that the Store is showing more than it should, and a way to undo it that
+ * is not another twenty taps.
+ */
+function testingSection() {
+  if (!showHidden()) return null;
+
+  const section = el('div');
+  section.append(el('h2', 'category', 'Testing'));
+  section.append(el('p', null,
+    'The Store is showing packages the catalogue hides. They are marked '
+    + '"Hidden" on their cards.'));
+  section.append(el('p', 'dim',
+    'A package is hidden when it is not ready to be offered to everybody, not '
+    + 'because it is broken — but nothing has vouched for it either. KhiCAS is '
+    + 'here because at 44 files and nearly three megabytes it is the only thing '
+    + 'big enough to make the calculator garbage collect, which is worth being '
+    + 'able to test on purpose.'));
+
+  const actions = el('div', 'app-actions');
+  const hide = el('button', null, 'Put hidden packages away');
+  hide.addEventListener('click', () => {
+    setShowHidden(false);
+    redraw();
+  });
+  actions.append(hide);
+  section.append(actions);
+
+  return section;
+}
+
 export function render() {
   const panel = document.getElementById('panel-settings');
   const calculator = getCalculator();
 
   if (!calculator) {
-    panel.replaceChildren(
+    panel.replaceChildren(...[
       channelSection(),
-      el('p', 'placeholder', 'Connect a calculator to change its settings.'));
+      testingSection(),
+      el('p', 'placeholder', 'Connect a calculator to change its settings.'),
+    ].filter(Boolean));
     return;
   }
 
   const wrap = el('div');
   wrap.append(channelSection());
+  const testing = testingSection();
+  if (testing) wrap.append(testing);
   wrap.append(el('h2', 'category', 'Sync password'));
 
   if (!isAvailable()) {
@@ -707,6 +748,7 @@ export function init(hooks) {
   getSession = hooks.getSession;
   onChanged = hooks.onChanged;
   onChannelChanged = hooks.onChannelChanged;
+  redraw = hooks.redraw;
   exclusive = hooks.exclusive;
   isBusy = hooks.isBusy;
 }

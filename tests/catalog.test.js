@@ -36,3 +36,29 @@ test('everything else is unaffected', () => {
   deepEqual(names(search(catalog, 'snake')), ['snake']);
   deepEqual(names(search(catalog, 'lib')), ['clibs'], 'by id');
 });
+
+/* --------------------------------------------------- packages the Store hides */
+
+test('a hidden package is shown when the Store is asked for it', () => {
+  /*
+   * The twenty-tap unlock in testing.js decides *whether* to ask; these two
+   * only have to answer honestly either way, which is why the option is a
+   * parameter rather than something they read for themselves.
+   */
+  deepEqual(names(listable(catalog, { hidden: true })),
+            ['snake', 'khicas', 'clibs']);
+});
+
+test('and found by searching, once it is', () => {
+  deepEqual(names(search(catalog, 'khicas', { hidden: true })), ['khicas']);
+  deepEqual(names(search(catalog, 'algebra', { hidden: true })), ['khicas'],
+            'by its summary too');
+});
+
+test('asking for them explicitly is the only way to get them', () => {
+  /* The default has to stay the safe one: every existing caller passes no
+   * options at all, and a hidden package appearing for everybody is the
+   * failure this guards. */
+  deepEqual(names(listable(catalog, {})), ['snake', 'clibs']);
+  deepEqual(names(search(catalog, '', { hidden: false })), ['snake', 'clibs']);
+});

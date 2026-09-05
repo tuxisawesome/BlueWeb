@@ -188,13 +188,17 @@ export async function loadFile(catalog, id, path) {
  * and anything depending on it still resolves. What it loses is the shop
  * window. That is the whole difference between disabling a package and taking
  * it out of apps/ -- the second orphans every calculator that already has it.
+ *
+ * `hidden` puts them back in the window, for somebody testing this page -- see
+ * testing.js. It is a parameter rather than something read from storage in
+ * here, so these two stay functions of what they are given.
  */
-export function listable(catalog) {
-  return catalog.apps.filter((app) => !app.disabled);
+export function listable(catalog, { hidden = false } = {}) {
+  return hidden ? catalog.apps : catalog.apps.filter((app) => !app.disabled);
 }
 
-export function search(catalog, query) {
-  const apps = listable(catalog);
+export function search(catalog, query, { hidden = false } = {}) {
+  const apps = listable(catalog, { hidden });
   const needle = query.trim().toLowerCase();
   if (!needle) return apps;
   return apps.filter((app) =>

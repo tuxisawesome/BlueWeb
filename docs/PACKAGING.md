@@ -235,6 +235,22 @@ writes them to `builds/$VERSION/`, registers the build and points
 **development** at it. It never touches `release`. Staging a build is not
 publishing it, and the two being separate acts is what the channel is for.
 
+## Hiding a package
+
+`"disabled": true` takes a package out of the Store's window without taking it
+out of the catalogue. One already on a calculator keeps its name in the Device
+panel and its version in Updates, and anything depending on it still resolves.
+That is the whole difference between hiding a package and deleting `apps/<id>/`,
+which orphans every calculator that already has it.
+
+Hidden packages can still be reached, on purpose: tapping the catalogue line at
+the foot of the Store twenty times puts them back in the window, marked
+"Hidden", and Settings then grows a Testing section with the switch to put them
+away again. It is the gesture a phone uses for its developer options, and it is
+there for the same reason — some things can only be tested with a package that
+is not for general consumption. KhiCAS, at 44 files and nearly three megabytes,
+is the only one here big enough to make a calculator garbage collect.
+
 ## After changing anything
 
 ```sh

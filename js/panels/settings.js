@@ -12,8 +12,10 @@
  */
 
 import { ask, notice, progress, el } from '../ui.js';
-import { CHANNELS, getChannel, setChannel, channelName } from '../channel.js';
-import { showHidden, setShowHidden } from '../testing.js';
+import {
+  CHANNELS, getChannel, setChannel, channelName, DEFAULT_CHANNEL,
+} from '../channel.js';
+import { developerMode, setDeveloperMode } from '../developer.js';
 import { isAvailable } from '../sha256.js';
 import { encrypt, decrypt } from '../crypt.js';
 import { buildBackup, parseBackup, backupSize } from '../backup.js';
@@ -24,7 +26,6 @@ let getCalculator = null;
 let getSession = null;
 let onChanged = null;
 let onChannelChanged = null;
-let redraw = null;
 let exclusive = null;  /* run an operation with the calculator held */
 let isBusy = null;
 
@@ -522,19 +523,19 @@ function describeDrift(seconds) {
   return `${Math.round(seconds / 86400)} days`;
 }
 
-/* ------------------------------------------------------------- the channel */
+/* ---------------------------------------------------------- developer options */
 
 /*
  * Which build of BlueObject this page installs.
  *
- * This is a setting of the page rather than of the calculator, so unlike
- * everything else on this panel it is drawn whether or not one is connected --
- * and it has to be, because the commonest reason to come here is to switch
- * channel *before* plugging anything in.
+ * A setting of the page rather than of the calculator, so unlike everything
+ * else on this panel it does not need one connected -- and it must not, because
+ * the commonest reason to come here is to switch channel *before* plugging
+ * anything in.
  */
-function channelSection() {
+function channelChooser() {
   const section = el('div');
-  section.append(el('h2', 'category', 'Builds'));
+  section.append(el('h3', null, 'Builds'));
   section.append(el('p', null,
     'BlueObject is the program on the calculator that does the installing, so a '
     + 'new one is worth trying before everybody gets it. This chooses which '
@@ -592,35 +593,52 @@ function channelSection() {
 }
 
 /*
- * Only once the Store's twenty taps have found it.
+ * Everything the twenty taps on the Store's footnote unlock, in one place.
  *
- * The point of putting it here is that it stops being hidden the moment it is
- * on. Somebody who unlocked this a month ago and has forgotten needs a place to
- * see that the Store is showing more than it should, and a way to undo it that
- * is not another twenty taps.
+ * Nothing here appears until they have been found, which is the point: a build
+ * channel and a store full of packages that were hidden for a reason are both
+ * worse than useless to somebody who wandered into them.
+ *
+ * Turning it off puts the channel back to release as well as putting the
+ * packages away. Leaving somebody on development firmware with no visible
+ * control over it is exactly the state this section exists to prevent, and it
+ * is the state they would be in if the switch only did half the job.
  */
-function testingSection() {
-  if (!showHidden()) return null;
+function developerSection() {
+  if (!developerMode()) return null;
 
-  const section = el('div');
-  section.append(el('h2', 'category', 'Testing'));
+  const section = el('div', 'explain');
+  section.append(el('h2', 'category', 'Developer options'));
+  section.append(el('p', 'dim',
+    'You found the footnote at the foot of the Store. These are off for '
+    + 'everybody else.'));
+
+  section.append(channelChooser());
+
+  section.append(el('h3', null, 'Hidden packages'));
   section.append(el('p', null,
     'The Store is showing packages the catalogue hides. They are marked '
     + '"Hidden" on their cards.'));
   section.append(el('p', 'dim',
-    'A package is hidden when it is not ready to be offered to everybody, not '
-    + 'because it is broken — but nothing has vouched for it either. KhiCAS is '
+    'A package is hidden when it is not ready to be offered to everybody — not '
+    + 'because it is broken, but nothing has vouched for it either. KhiCAS is '
     + 'here because at 44 files and nearly three megabytes it is the only thing '
     + 'big enough to make the calculator garbage collect, which is worth being '
     + 'able to test on purpose.'));
 
   const actions = el('div', 'app-actions');
-  const hide = el('button', null, 'Put hidden packages away');
-  hide.addEventListener('click', () => {
-    setShowHidden(false);
-    redraw();
+  const off = el('button', null, 'Turn off developer options');
+  off.addEventListener('click', () => {
+    const wasDevelopment = getChannel() !== DEFAULT_CHANNEL;
+    setChannel(DEFAULT_CHANNEL);
+    setDeveloperMode(false);
+    notice(wasDevelopment
+      ? 'Developer options are off, and the Store is back on release builds.'
+      : 'Developer options are off.');
+    /* The channel may have moved, so this refetches rather than redraws. */
+    onChannelChanged();
   });
-  actions.append(hide);
+  actions.append(off);
   section.append(actions);
 
   return section;
@@ -632,17 +650,13 @@ export function render() {
 
   if (!calculator) {
     panel.replaceChildren(...[
-      channelSection(),
-      testingSection(),
       el('p', 'placeholder', 'Connect a calculator to change its settings.'),
+      developerSection(),
     ].filter(Boolean));
     return;
   }
 
   const wrap = el('div');
-  wrap.append(channelSection());
-  const testing = testingSection();
-  if (testing) wrap.append(testing);
   wrap.append(el('h2', 'category', 'Sync password'));
 
   if (!isAvailable()) {
@@ -652,6 +666,8 @@ export function render() {
     /* Only the password needs crypto. The clock does not, and a calculator
      * whose dates are wrong should still be fixable here. */
     wrap.append(clockSection(calculator));
+    const early = developerSection();
+    if (early) wrap.append(early);
     panel.replaceChildren(wrap);
     return;
   }
@@ -740,6 +756,11 @@ export function render() {
     + 'is gone. There is no copy of it anywhere.'));
   wrap.append(explain);
 
+  /* Last, the way developer options are everywhere: past everything an
+   * ordinary user came here for. */
+  const developer = developerSection();
+  if (developer) wrap.append(developer);
+
   panel.replaceChildren(wrap);
 }
 
@@ -748,7 +769,6 @@ export function init(hooks) {
   getSession = hooks.getSession;
   onChanged = hooks.onChanged;
   onChannelChanged = hooks.onChannelChanged;
-  redraw = hooks.redraw;
   exclusive = hooks.exclusive;
   isBusy = hooks.isBusy;
 }

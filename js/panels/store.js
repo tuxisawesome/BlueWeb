@@ -5,8 +5,8 @@
 import { loadCatalog, loadManifest, search, reset } from '../catalog.js';
 import { getChannel } from '../channel.js';
 import {
-  showHidden, setShowHidden, UNLOCK_TAPS, COUNTDOWN_FROM,
-} from '../testing.js';
+  developerMode, setDeveloperMode, UNLOCK_TAPS, COUNTDOWN_FROM,
+} from '../developer.js';
 import { resolveInstall, DependencyError } from '../deps.js';
 import { compareVersions } from '../version.js';
 import { ask, progress, showMessages, notice, advancedLog, el } from '../ui.js';
@@ -294,29 +294,29 @@ let taps = 0;
 
 function catalogueLine() {
   const line = el('p', 'footnote');
-  const unlocked = showHidden();
+  const unlocked = developerMode();
 
   const describe = () => {
     const revision = (catalog?.revision || '').replace('T', ' ').replace('Z', '');
     line.textContent = `Catalogue ${revision} · ${getChannel()} channel`
-      + (unlocked ? ' · showing hidden packages' : '');
+      + (unlocked ? ' · developer options on' : '');
   };
   describe();
 
   line.addEventListener('click', () => {
-    if (showHidden()) return;   /* Already on; Settings is where it goes off. */
+    if (developerMode()) return;  /* Already on; Settings is where it goes off. */
 
     taps++;
     const left = UNLOCK_TAPS - taps;
 
     if (left <= 0) {
       taps = 0;
-      if (setShowHidden(true)) {
-        notice('Hidden packages are now in the Store. Settings has the switch '
-          + 'to put them away again.');
+      if (setDeveloperMode(true)) {
+        notice('Developer options are on. Settings has the build channel and '
+          + 'the switch to turn all this off again.');
       } else {
-        notice('This browser will not let the page remember that, so hidden '
-          + 'packages will be put away again when you reload.', 'warn');
+        notice('This browser will not let the page remember that, so developer '
+          + 'options will be off again when you reload.', 'warn');
       }
       /* Settings grows a section the moment this goes on, and switching tabs
        * does not redraw on its own. */
@@ -349,7 +349,7 @@ export function render(query = '') {
   box.addEventListener('input', () => render(box.value));
   wrap.append(box);
 
-  const hidden = showHidden();
+  const hidden = developerMode();
   const matches = search(catalog, query, { hidden });
   if (!matches.length) {
     wrap.append(el('p', 'placeholder', `Nothing matches "${query}".`));

@@ -189,9 +189,9 @@ export async function loadFile(catalog, id, path) {
  * window. That is the whole difference between disabling a package and taking
  * it out of apps/ -- the second orphans every calculator that already has it.
  *
- * `hidden` puts them back in the window, for somebody testing this page -- see
- * testing.js. It is a parameter rather than something read from storage in
- * here, so these two stay functions of what they are given.
+ * `hidden` puts them back in the window, for somebody who has turned developer
+ * options on -- see developer.js. It is a parameter rather than something read
+ * from storage in here, so these two stay functions of what they are given.
  */
 export function listable(catalog, { hidden = false } = {}) {
   return hidden ? catalog.apps : catalog.apps.filter((app) => !app.disabled);

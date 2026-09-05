@@ -192,7 +192,9 @@ apps/blueobject/
 
 **A channel is a pointer to a build.** `release` is required: it is what anybody
 who has not chosen otherwise is served, and what a browser that cannot remember
-a choice falls back to. Readers pick a channel in Settings → Builds.
+a choice falls back to. Choosing anything else is behind Developer options
+(below), because a build nobody has vouched for is not something to offer a
+reader who wandered into Settings.
 
 **A build inherits the whole manifest and overrides what it names.** So the
 name, the actions and the summary are written once. What a build almost always
@@ -244,12 +246,13 @@ That is the whole difference between hiding a package and deleting `apps/<id>/`,
 which orphans every calculator that already has it.
 
 Hidden packages can still be reached, on purpose: tapping the catalogue line at
-the foot of the Store twenty times puts them back in the window, marked
-"Hidden", and Settings then grows a Testing section with the switch to put them
-away again. It is the gesture a phone uses for its developer options, and it is
-there for the same reason — some things can only be tested with a package that
-is not for general consumption. KhiCAS, at 44 files and nearly three megabytes,
-is the only one here big enough to make a calculator garbage collect.
+the foot of the Store twenty times turns on **Developer options**, which puts
+them back in the window marked "Hidden" and adds a section at the foot of
+Settings holding them and the build channel, with the switch to turn it all off
+again. It is the gesture a phone uses for its developer options and it is there
+for the same reason — some things can only be tested with a package that is not
+for general consumption. KhiCAS, at 44 files and nearly three megabytes, is the
+only one here big enough to make a calculator garbage collect.
 
 ## After changing anything
 

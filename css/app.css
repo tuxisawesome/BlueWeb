@@ -74,6 +74,10 @@ main { padding: 24px 20px 64px; max-width: 900px; }
             letter-spacing: 0.08em; color: var(--dim); }
 .category:first-child { margin-top: 0; }
 
+/* Subheadings inside a section -- the two halves of Developer options. Smaller
+ * than a .category so the section still reads as one thing. */
+.panel h3 { margin: 20px 0 6px; font-size: 14px; font-weight: 600; }
+
 .search {
   width: 100%; padding: 9px 12px; margin-bottom: 8px;
   background: var(--panel); color: var(--fg);

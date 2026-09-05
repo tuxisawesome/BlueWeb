@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "revision": "2026-09-05T03:13:02Z",
+  "revision": "2026-09-05T15:14:45Z",
   "categories": [
     {
       "id": "games",
@@ -86,9 +86,7 @@
       "version": "3.7.0",
       "bytes": 13676,
       "maxFile": 13676,
-      "deps": [
-        "clibs"
-      ],
+      "deps": [],
       "summary": "A GUI shell for running programs on the calculator."
     },
     {

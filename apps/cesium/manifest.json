@@ -6,7 +6,7 @@
   "category": "system",
   "version": "3.7.0",
   "summary": "A GUI shell for running programs on the calculator.",
-  "description": "Cesium is a shell: it lists the programs on your calculator, runs them whether or not they are archived, and can hide, rename and lock them. Most C programs expect a shell to launch them from.\n\nWhat this installs is the installer. CESIUM is an ordinary program, and running it once is what creates the Cesium application under [apps]. That is why Cesium is listed as a system update even though nothing here needs prgmBLUEUP: it is finished on the calculator rather than over the cable.",
+  "description": "Cesium is a shell: it lists the programs on your calculator, runs them whether or not they are archived, and can hide, rename and lock them. Most C programs expect a shell to launch them from.\n\nCesium runs on its own. It can also read files from a USB drive, and that part \u2014 and only that part \u2014 needs the C Libraries, so they are worth having if you want it and no trouble if you do not.\n\nWhat this installs is the installer. CESIUM is an ordinary program, and running it once is what creates the Cesium application under [apps]. That is why Cesium is listed as a system update even though nothing here needs prgmBLUEUP: it is finished on the calculator rather than over the cable.",
   "author": "Matt Waltz",
   "homepage": "https://github.com/mateoconlechuga/cesium",
   "vendored": {
@@ -14,8 +14,12 @@
     "file": "cesium_english.zx0.8xp",
     "note": "The English build. The version above is the string the installer prints: \"Cesium Installer Version 3.7.0\"."
   },
-  "dependencies": [
-    "clibs"
+  "dependencies": [],
+  "optionalDependencies": [
+    {
+      "id": "clibs",
+      "reason": "Reading files from a USB drive"
+    }
   ],
   "actions": {
     "install": [

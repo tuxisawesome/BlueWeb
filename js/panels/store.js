@@ -231,6 +231,23 @@ function appPage(entry) {
       facts.append(el('dt', null, 'Needs'), el('dd', null, entry.deps
         .map((id) => catalog.byId.get(id)?.name || id).join(', ')));
     }
+    /*
+     * What the package can use but starts without, and what for.
+     *
+     * Worth a line of its own rather than being folded in with "Needs": the
+     * difference decides whether somebody has to install something else before
+     * this is any use, and Cesium reads a USB drive with the C Libraries and
+     * runs perfectly well without them. It comes from the manifest rather than
+     * the index because nothing has to resolve it -- an optional dependency is
+     * never installed for you, which is the whole of what makes it optional.
+     */
+    for (const dep of manifest.optionalDependencies || []) {
+      const id = typeof dep === 'string' ? dep : dep.id;
+      const name = catalog.byId.get(id)?.name || id;
+      const reason = typeof dep === 'string' ? null : dep.reason;
+      facts.append(el('dt', null, 'Can use'),
+                   el('dd', null, reason ? `${name} — ${reason}` : name));
+    }
     facts.append(el('dt', null, 'Largest file'), el('dd', null, kb(entry.maxFile)));
     detail.append(facts);
   }).catch((error) => {

@@ -274,8 +274,26 @@ that forgot to declare them worked anyway. BlueObject 2.0.0 needs none of them â
 so a calculator can now be perfectly set up with no libraries on it, and a
 package that forgot finds out by not starting.
 
+Some packages only need them for part of what they do. Cesium reads files from
+a USB drive through `USBDRVCE` and runs perfectly well without it, so that goes
+in `optionalDependencies` instead:
+
+```json
+"dependencies": [],
+"optionalDependencies": [
+  { "id": "clibs", "reason": "Reading files from a USB drive" }
+]
+```
+
+An optional dependency is **never installed for you** â€” that is the whole of
+what makes it optional. It is shown on the app's page as "Can use", with the
+reason, so somebody deciding what they want can see what they would be
+choosing.
+
 The linter looks for the record a program carries naming each library it calls
-into, and refuses a package that references one without depending on `clibs`.
+into, and refuses a package that references one and says nothing about `clibs`
+in either list. It cannot tell needing one from merely using one; that is
+exactly why it insists a person has written down which it is.
 It catches a class of this rather than all of it: a name that falls inside a
 compressed run rather than a literal one is not there to find, which is how
 KhiCAS went unnoticed until somebody installed it. Passing the check is not

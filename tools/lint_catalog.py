@@ -287,8 +287,14 @@ def check_library_use(manifests, problems):
     -- and that record survives in the file often enough to be worth looking
     for, including inside the compressed ones. Only the names the clibs package
     actually installs are looked for, so there is nothing to match by accident;
-    across every package here it finds exactly the ones that do use them and
-    nothing else.
+    across every package here it finds exactly the ones that do reference them
+    and nothing else.
+
+    Referencing a library is not the same as needing one. Cesium calls into
+    USBDRVCE to read a USB drive and runs perfectly well without it -- so what
+    this insists on is that the manifest has *said* which it is, in
+    dependencies or in optionalDependencies. Nothing here can tell the two
+    apart by looking; a person can, and this is what makes them.
 
     It can still miss. A name that falls inside a compressed run rather than a
     literal one will not be there to find, which is why KhiCAS -- whose payload
@@ -311,7 +317,8 @@ def check_library_use(manifests, problems):
 
         for version, resolved, files in builds:
             declared = {d if isinstance(d, str) else d.get("id")
-                        for d in resolved.get("dependencies", [])}
+                        for d in resolved.get("dependencies", [])
+                        + resolved.get("optionalDependencies", [])}
             if "clibs" in declared:
                 continue
 
@@ -328,9 +335,11 @@ def check_library_use(manifests, problems):
             if found:
                 at = f"{package_id} {version}" if len(builds) > 1 else package_id
                 problems.append(
-                    f"{at}: calls into {', '.join(sorted(found))} but does not "
-                    f"depend on clibs, so it will not start on a calculator "
-                    f"without them")
+                    f"{at}: calls into {', '.join(sorted(found))} but says "
+                    f"nothing about clibs. Add it to \"dependencies\" if the "
+                    f"package will not start without them, or to "
+                    f"\"optionalDependencies\" with a \"reason\" if it only "
+                    f"needs them for part of what it does")
 
 
 def main():
@@ -393,16 +402,22 @@ def main():
     # Dependencies, once every package is known. Per build: what a package needs
     # is a property of the build, and 2.0.0 of BlueObject needs nothing where
     # 1.3.0 needs the C libraries.
+    #
+    # Optional ones are checked the same way and then left alone. They are never
+    # installed for you -- that is the whole of what makes them optional -- but
+    # naming a package that is not there is still a mistake, and one that would
+    # otherwise only show as a blank on an app page.
     for package_id, (_, _, builds) in manifests.items():
         for version, resolved, _ in builds:
-            for dep in resolved.get("dependencies", []):
-                dep_id = dep if isinstance(dep, str) else dep.get("id")
-                at = f"{package_id} {version}" if len(builds) > 1 else package_id
-                if dep_id not in manifests:
-                    problems.append(f"{at}: depends on \"{dep_id}\", "
-                                    f"which is not in apps/")
-                elif dep_id == package_id:
-                    problems.append(f"{at}: depends on itself")
+            at = f"{package_id} {version}" if len(builds) > 1 else package_id
+            for field in ("dependencies", "optionalDependencies"):
+                for dep in resolved.get(field, []):
+                    dep_id = dep if isinstance(dep, str) else dep.get("id")
+                    if dep_id not in manifests:
+                        problems.append(f"{at}: {field} names \"{dep_id}\", "
+                                        f"which is not in apps/")
+                    elif dep_id == package_id:
+                        problems.append(f"{at}: {field} names itself")
 
     # Cycles, which would hang a resolver that trusted the catalogue. Taken over
     # every build's dependencies together: a cycle that exists on any channel is

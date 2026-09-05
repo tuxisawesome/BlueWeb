@@ -87,15 +87,52 @@ main { padding: 24px 20px 64px; max-width: 900px; }
 
 .grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 
+/*
+ * The frame, and the button that fills it.
+ *
+ * The card used to be the button. It is a plain box now because it also holds
+ * the selection checkbox, and a checkbox inside a button cannot be clicked --
+ * so the two are siblings, and .card-open is stripped back to nothing so the
+ * card still looks like one surface.
+ */
 .card {
-  display: flex; flex-direction: column; gap: 6px; align-items: stretch;
-  text-align: left; padding: 14px; background: var(--panel);
+  position: relative;
+  display: flex; flex-direction: column; align-items: stretch;
+  padding: 14px; background: var(--panel);
   border: 1px solid var(--line); border-radius: 10px;
 }
-.card:hover { border-color: var(--accent); }
-.card-name { font-weight: 600; }
+.card:hover, .card:focus-within { border-color: var(--accent); }
+.card.picked { border-color: var(--accent); background: var(--raised); }
+
+.card-open {
+  display: flex; flex-direction: column; gap: 6px; align-items: stretch; flex: 1;
+  padding: 0; margin: 0; border: 0; border-radius: 0;
+  background: none; color: inherit; font: inherit; text-align: left;
+}
+.card-open:hover:not(:disabled) { border-color: transparent; }
+
+/* Out of the flow, so ticking one does not move the text beside it. The name
+ * is inset to match, since it is the line that would otherwise run under. */
+.card-pick { position: absolute; top: 14px; right: 14px; margin: 0; cursor: pointer; }
+.card-name { font-weight: 600; padding-right: 24px; }
 .card-summary { color: var(--dim); font-size: 13px; flex: 1; }
 .card-foot { display: flex; gap: 8px; align-items: center; font-size: 12px; }
+
+/*
+ * What is ticked, and the button that installs it.
+ *
+ * Sticky to the bottom of the window rather than parked under the search box:
+ * the grid is taller than the viewport on most screens, and a bar you have to
+ * scroll back up to find is a bar people stop believing in.
+ */
+.selection-bar {
+  position: sticky; bottom: 12px; z-index: 4;
+  display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+  margin-top: 24px; padding: 10px 8px 10px 16px;
+  background: var(--raised); border: 1px solid var(--accent);
+  border-radius: 10px; box-shadow: 0 8px 24px rgba(4, 7, 12, 0.55);
+}
+.selection-actions { display: flex; gap: 10px; margin-left: auto; }
 
 .tag {
   font-size: 11px; padding: 1px 7px; border-radius: 999px;

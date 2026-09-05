@@ -234,3 +234,64 @@ export function findUpdates(catalog, installed) {
   }
   return updates.sort((a, b) => compareVersions(b.to, a.to));
 }
+
+/**
+ * What installing several things at once would mean.
+ *
+ * Each root is resolved in turn against what is on the calculator *now*, and
+ * the orders are laid end to end with anything already in the list dropped.
+ * Two apps that share a dependency must not send it twice, and the second
+ * resolve has no way of knowing the first one already accounted for it.
+ *
+ * Dropping duplicates cannot spoil the ordering: within one plan a dependency
+ * always precedes what needs it, and a skip only ever happens because the
+ * package is already *earlier* in the combined list.
+ *
+ * Resolving one root at a time rather than teaching visit() about several is
+ * deliberate. The single-root walk is what every word of the confirmation
+ * dialog is written against, and a second traversal order would be a second set
+ * of answers to explain.
+ */
+export function resolveInstallAll(catalog, installed, rootIds, manifests = null) {
+  const order = [];
+  const reasons = new Map();
+  const upgrades = [];
+  const satisfied = [];
+
+  for (const rootId of rootIds) {
+    const plan = resolveInstall(catalog, installed, rootId, manifests);
+
+    for (const entry of plan.order) {
+      if (reasons.has(entry.id)) continue;
+      order.push(entry);
+      reasons.set(entry.id, plan.reasons.get(entry.id));
+    }
+    for (const item of plan.upgrades) {
+      if (!upgrades.some((each) => each.entry.id === item.entry.id)) upgrades.push(item);
+    }
+    for (const item of plan.satisfied) {
+      if (!satisfied.some((each) => each.entry.id === item.entry.id)) satisfied.push(item);
+    }
+  }
+
+  /*
+   * Asked for by name beats pulled in, whatever reached it first. Somebody who
+   * ticks the C libraries and Cesium is owed a dialog saying they asked for the
+   * libraries, not that Cesium did -- and the difference decides whether the
+   * libraries are later offered up as an orphan.
+   */
+  const requested = new Set(rootIds);
+  for (const id of requested) {
+    if (reasons.has(id)) reasons.set(id, { requested: true });
+  }
+
+  return {
+    order,
+    reasons,
+    upgrades,
+    /* One root can find a package acceptable while another needs it upgraded.
+     * It is being installed, so it is not also being left alone. */
+    satisfied: satisfied.filter((each) => !reasons.has(each.entry.id)),
+    requested,
+  };
+}

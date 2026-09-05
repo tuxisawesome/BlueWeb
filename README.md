@@ -25,6 +25,7 @@ removing, and the sync password.
 | ✅ | installing and removing, with pre-flight and recoverable interruptions |
 | ✅ | the Store, app pages, search, the Updates panel, removal from Device |
 | ✅ | the sync password |
+| ✅ | ticking several apps in the Store and installing them in one go |
 | ✅ | clearing several stray files at once from Device |
 | ✅ | encrypted backup of the whole calculator, and restore |
 

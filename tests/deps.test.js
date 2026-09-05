@@ -1,7 +1,7 @@
 import { test, deepEqual, equal, throws, assert } from './harness.js';
 import {
-  resolveInstall, dependentsOf, planRemoval, orphansAfter, findUpdates,
-  PROTECTED,
+  resolveInstall, resolveInstallAll, dependentsOf, planRemoval, orphansAfter,
+  findUpdates, PROTECTED,
 } from '../js/deps.js';
 
 function catalog(apps) {
@@ -188,4 +188,76 @@ test('an ordinary dependency is still only a warning', () => {
 test('BlueObject is the protected one', () => {
   assert(PROTECTED.has('blueobject'));
   assert(!PROTECTED.has('cesium'), 'Cesium is a system package but is removable');
+});
+
+/* ------------------------------------------------- several apps in one go */
+
+test('a shared dependency is only installed once for a batch', () => {
+  const plan = resolveInstallAll(store, [], ['snake', 'oiram']);
+  deepEqual(plan.order.map((e) => e.id), ['clibs', 'snake', 'fontlib', 'oiram']);
+});
+
+test('a batch still installs every dependency before what needs it', () => {
+  const plan = resolveInstallAll(store, [], ['oiram', 'snake', 'fontlib']);
+  const order = plan.order.map((e) => e.id);
+  for (const [dep, app] of [['clibs', 'snake'], ['clibs', 'oiram'],
+                            ['clibs', 'fontlib'], ['fontlib', 'oiram']]) {
+    assert(order.indexOf(dep) < order.indexOf(app),
+      `${dep} must come before ${app}, got ${order.join(', ')}`);
+  }
+});
+
+test('every app in a batch is recorded as asked for, not as a dependency', () => {
+  /*
+   * clibs is reached as Snake's dependency before the walk ever gets to it as a
+   * root of its own. Whichever order the batch is resolved in, somebody who
+   * ticked it is owed a dialog that says they asked for it -- and it must not
+   * be installed as a pulled-in package that Device later offers as an orphan.
+   */
+  const plan = resolveInstallAll(store, [], ['snake', 'clibs']);
+  deepEqual(plan.reasons.get('clibs'), { requested: true });
+  deepEqual(plan.reasons.get('snake'), { requested: true });
+  deepEqual([...plan.requested].sort(), ['clibs', 'snake']);
+});
+
+test('a dependency nobody ticked keeps the name of what pulled it in', () => {
+  const plan = resolveInstallAll(store, [], ['oiram', 'snake']);
+  deepEqual(plan.reasons.get('clibs'), { requiredBy: 'oiram' });
+  deepEqual(plan.reasons.get('fontlib'), { requiredBy: 'oiram' });
+});
+
+test('a batch leaves alone what is already installed', () => {
+  const installed = [pkg('clibs', '11.0.0', []), pkg('snake', '1.2.0', ['clibs'])];
+  const plan = resolveInstallAll(store, installed, ['snake', 'oiram']);
+  deepEqual(plan.order.map((e) => e.id), ['fontlib', 'oiram']);
+  deepEqual(plan.satisfied.map((s) => s.entry.id).sort(), ['clibs', 'snake']);
+});
+
+test('a package one app can live with and another cannot is installed, not skipped', () => {
+  /*
+   * Snake accepts the installed C libraries; Oiram's manifest asks for a newer
+   * range than what is on the calculator. Resolved one root at a time that is
+   * "satisfied" once and "upgrade" once, and the honest answer is the upgrade:
+   * it is in the order, so it must not also be reported as left alone.
+   */
+  const installed = [pkg('clibs', '10.0.0', [])];
+  const manifests = new Map([
+    ['snake', { id: 'snake', dependencies: ['clibs'] }],
+    ['oiram', { id: 'oiram',
+                dependencies: [{ id: 'clibs', version: '>=11.0.0' }, 'fontlib'] }],
+  ]);
+  const plan = resolveInstallAll(store, installed, ['snake', 'oiram'], manifests);
+  assert(plan.order.some((e) => e.id === 'clibs'), 'the libraries are upgraded');
+  deepEqual(plan.satisfied.map((s) => s.entry.id), [],
+    'nothing being installed is also reported as left alone');
+});
+
+test('an empty batch plans nothing rather than throwing', () => {
+  const plan = resolveInstallAll(store, [], []);
+  deepEqual(plan.order, []);
+});
+
+test('a batch reports a broken dependency the same way one app does', () => {
+  const broken = catalog([{ id: 'a', name: 'A', version: '1.0.0', deps: ['ghost'] }]);
+  throws(() => resolveInstallAll(broken, [], ['a']), 'not in the catalogue');
 });

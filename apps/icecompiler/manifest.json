@@ -5,6 +5,7 @@
   "kind": "app",
   "category": "tools",
   "version": "2.2.1",
+  "disabled": true,
   "summary": "Compiles a TI-BASIC-like language to machine code, on the calculator.",
   "description": "ICE compiles a language much like TI-BASIC straight to ez80 machine code, so the result runs at assembly speed instead of being interpreted a token at a time. Programs written this way are dramatically faster than the same thing in TI-BASIC, and can use the colour screen properly.\n\nIt runs on the calculator itself: start it, pick one of your source programs from the list, and it writes out a compiled program next to it. There is a commands list in the documentation \u2014 the language is close to TI-BASIC but not all of it is there.\n\n2048, elsewhere in this store, was written with it.",
   "author": "Peter \"PT_\" Tillema",

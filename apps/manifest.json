@@ -155,7 +155,8 @@
       "deps": [
         "clibs"
       ],
-      "summary": "Compiles a TI-BASIC-like language to machine code, on the calculator."
+      "summary": "Compiles a TI-BASIC-like language to machine code, on the calculator.",
+      "disabled": true
     },
     {
       "id": "khicas",

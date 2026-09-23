@@ -83,7 +83,7 @@
       "name": "Cesium",
       "kind": "system",
       "category": "system",
-      "version": "3.7.0",
+      "version": "3.8.0",
       "bytes": 13676,
       "maxFile": 13676,
       "deps": [],
@@ -163,7 +163,7 @@
       "name": "KhiCAS",
       "kind": "system",
       "category": "tools",
-      "version": "2024.10.23",
+      "version": "2026.9.23",
       "bytes": 2814827,
       "maxFile": 65232,
       "deps": [

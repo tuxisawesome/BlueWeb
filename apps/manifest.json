@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "revision": "2026-09-05T19:15:13Z",
+  "revision": "2026-09-23T21:10:02Z",
   "categories": [
     {
       "id": "games",
@@ -84,8 +84,8 @@
       "kind": "system",
       "category": "system",
       "version": "3.8.0",
-      "bytes": 13676,
-      "maxFile": 13676,
+      "bytes": 13568,
+      "maxFile": 13568,
       "deps": [],
       "summary": "A GUI shell for running programs on the calculator."
     },
